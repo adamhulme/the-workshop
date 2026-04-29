@@ -77,25 +77,13 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 
 ## Install
 
-One-liner — installs every slash command in this repo into `~/.claude/commands/`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/install.sh | bash
-```
-
-Project-scoped — installs into the current repo's `.claude/commands/` instead:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/install.sh | bash -s -- --project
-```
-
-Or clone and run locally:
+Clone the repo and run the installer:
 
 ```bash
 git clone https://github.com/adamhulme/the-workshop.git
 cd the-workshop
-./install.sh                # user-scoped (default)
-./install.sh --project      # project-scoped
+./install.sh                # user-scoped → ~/.claude/commands/
+./install.sh --project      # project-scoped → ./.claude/commands/
 ```
 
 Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete.
