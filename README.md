@@ -77,27 +77,28 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 
 ## Install
 
-Slash commands in this repo are plain markdown. Drop them into your Claude Code commands directory.
-
-**Mac / Linux** — copy into your user-scoped commands folder:
+One-liner — installs every slash command in this repo into `~/.claude/commands/`:
 
 ```bash
-cp commands/changelog.md ~/.claude/commands/
+curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/install.sh | bash
 ```
 
-**Windows** — copy into your user-scoped commands folder:
-
-```powershell
-Copy-Item commands\changelog.md $env:USERPROFILE\.claude\commands\
-```
-
-**Project-scoped** — install only for the current repo:
+Project-scoped — installs into the current repo's `.claude/commands/` instead:
 
 ```bash
-mkdir -p .claude/commands && cp commands/changelog.md .claude/commands/
+curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/install.sh | bash -s -- --project
 ```
 
-Restart Claude Code. The command appears in your `/` autocomplete.
+Or clone and run locally:
+
+```bash
+git clone https://github.com/adamhulme/the-workshop.git
+cd the-workshop
+./install.sh                # user-scoped (default)
+./install.sh --project      # project-scoped
+```
+
+Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete.
 
 ## Roadmap (loose)
 
