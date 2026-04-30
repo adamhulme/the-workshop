@@ -124,8 +124,9 @@ curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/update.
 
 What it does:
 
-- Runs `install.sh` against the latest `main`, overwriting installed skill files (silent overwrite — if you've edited a skill locally, fork it before updating).
-- Diffs the previous manifest against the new one and **prunes** any skill that was installed by an earlier release but is no longer shipped. Files the workshop never installed are left alone.
+- **Always shallow-clones the latest `main` from origin** into a temp dir before installing — even when run from a local clone. A stale checkout never reinstalls itself. (If you want to install from a local checkout, run `install.sh` directly.)
+- Overwrites installed skill files (silent overwrite — if you've edited a skill locally, fork it before updating).
+- Diffs the previous manifest against the new one and **prunes** any skill that was installed by an earlier release but is no longer shipped. Manifest entries are validated against the expected `commands/*.md` or `agents/*.md` shape before any `rm`; anything outside that shape is logged and skipped, so a tampered manifest cannot be coerced into deleting files outside the install target. Files the workshop never installed are left alone.
 - Reports the version transition (`Update complete: 0.1.0 → 0.2.0 (user scope).`).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each release. The current version is in [VERSION](VERSION).

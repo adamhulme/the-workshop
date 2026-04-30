@@ -16,9 +16,13 @@ A bump is reserved until the next release; in-progress work lives under `[Unrele
 
 ### Added
 
-- `update.sh` — pulls the latest commands and agents and prunes any that have been removed upstream, using a manifest written by `install.sh` at install time. Same `--user`/`--project` flags as `install.sh`.
+- `update.sh` — always shallow-clones the latest `main` from origin (never trusts a local clone, even when run from one), runs `install.sh` from that fresh source, then diffs the previous manifest against the new one and prunes any skills that have been removed upstream. Same `--user`/`--project` flags as `install.sh`, with auto-detection from the existing manifest when neither flag is given.
 - `install.sh` now writes `.workshop-manifest` and `.workshop-version` into the install target so `update.sh` can diff and prune cleanly without touching skills the workshop didn't install.
 - `VERSION` and `CHANGELOG.md` at the repo root. The version is echoed at the end of `install.sh` and `update.sh`.
+
+### Security
+
+- `update.sh` validates every manifest entry against `^(commands|agents)/[A-Za-z0-9._-]+\.md$` before any `rm` operation. A tampered or hand-edited `.workshop-manifest` containing `..` segments or absolute paths is rejected outright and logged — it cannot be coerced into deleting files outside the install target.
 
 ## [0.1.0] — initial public release
 
@@ -34,7 +38,7 @@ The first version intended for public consumption. Nine slash commands and three
 - `/design-capture` — surface design drift in an existing frontend, validate a synthesised system with the user, write `DESIGN.md`.
 - `/brainstorm` — four-lens ideation (user, ops, scope, risk) grounded in `docs/research/`; surfaces tensions explicitly.
 - `/triage` — sweep `todos/`, unresolved PR review threads, and (if configured) the Jira queue; rank top moves by cost/value/decay.
-- `/changelog` — synthesise a release narrative from recent merges and `outcome` solution docs into `docs/changelog.md`.
+- `/changelog` — synthesise a release narrative from recent `main` merges, enriching each with the matching PR body (via `gh`) and `docs/plans/<slug>.md` if present. Writes under a dated heading in `docs/changelog.md`.
 
 ### Agents
 
