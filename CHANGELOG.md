@@ -14,11 +14,15 @@ A bump is reserved until the next release; in-progress work lives under `[Unrele
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-30
+
 ### Added
 
 - `update.sh` — always shallow-clones the latest `main` from origin (never trusts a local clone, even when run from one), runs `install.sh` from that fresh source, then diffs the previous manifest against the new one and prunes any skills that have been removed upstream. Same `--user`/`--project` flags as `install.sh`, with auto-detection from the existing manifest when neither flag is given.
 - `install.sh` now writes `.workshop-manifest` and `.workshop-version` into the install target so `update.sh` can diff and prune cleanly without touching skills the workshop didn't install.
 - `VERSION` and `CHANGELOG.md` at the repo root. The version is echoed at the end of `install.sh` and `update.sh`.
+- README **Starter guide** section — five-step walkthrough of the compounding loop (`/init-workshop` → `/research` → `/plan` → `/solution` → `/changelog`) using a real task as the anchor, plus a "where to go next" entry-point map for `/triage`, `/brainstorm`, `/sanitise`, and `/design-capture`.
+- README **Updating** section — documents `update.sh` flags, curl-pipe-bash usage, and the silent-overwrite-then-prune model.
 
 ### Security
 
