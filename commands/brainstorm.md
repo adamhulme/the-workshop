@@ -24,7 +24,14 @@ User arguments: $ARGUMENTS
 
 5. **Surface tensions.** Add a `## Tensions` section that explicitly names where the lenses disagree. Don't smooth them — name them. Example: "User wants <X>, Ops wants <Y>, these conflict because <Z>."
 
-6. **Derive a slug.** From `$ARGUMENTS` or by asking the user. Confirm: `Save brainstorm as docs/brainstorms/<slug>.md? (y / paste alternative)`. Handle collision by prompting.
+6. **Derive and validate a slug.** Take the slug from `$ARGUMENTS` or by asking the user.
+
+   Validate before using it as a path:
+   - **Reject** if it contains path separators (`/`, `\`), `..` segments, or starts with `/`, `~`, or a Windows drive letter (e.g. `C:`). These would write outside `docs/brainstorms/`.
+   - **Reject** characters that are illegal in filenames on common filesystems (newlines, NUL, `:`, `*`, `?`, `"`, `<`, `>`, `|`).
+   - If the slug isn't already kebab-case (lowercase ASCII alphanumerics + hyphens), normalise: lowercase, replace runs of whitespace/underscores/punctuation with `-`, collapse repeated hyphens, trim leading/trailing hyphens. Show the normalised result and confirm: `Use slug <normalised>? (y / paste alternative)`.
+
+   On rejection, ask the user for a clean slug and re-validate. Then confirm: `Save brainstorm as docs/brainstorms/<slug>.md? (y / paste alternative)`. Handle collision by prompting.
 
 7. **Write the file.** Frontmatter:
    ```

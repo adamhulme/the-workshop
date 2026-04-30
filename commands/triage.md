@@ -14,9 +14,27 @@ User arguments: $ARGUMENTS
 
 3. **Source 2 — open PR comments.** If `gh` is installed and authenticated:
    - Detect current branch via `git rev-parse --abbrev-ref HEAD`.
-   - Find an open PR for the branch via `gh pr view --json number,comments,reviews,url 2>/dev/null`.
-   - Pull unresolved review threads and unaddressed comments.
-   - If no open PR, skip silently.
+   - Find an open PR for the branch and capture its number plus the `owner/repo` slug: `gh pr view --json number,url,headRepositoryOwner,headRepository 2>/dev/null`. If no open PR, skip silently.
+   - Pull review threads with their resolved/unresolved state via the GraphQL API — `gh pr view --json comments,reviews` does **not** expose `isResolved`, so the unresolved filter would silently miss the exact items this skill is meant to surface. Call:
+     ```
+     gh api graphql -f query='
+       query($owner: String!, $repo: String!, $number: Int!) {
+         repository(owner: $owner, name: $repo) {
+           pullRequest(number: $number) {
+             reviewThreads(first: 100) {
+               nodes {
+                 isResolved
+                 comments(first: 50) {
+                   nodes { author { login } body path line createdAt url }
+                 }
+               }
+             }
+           }
+         }
+       }' -F owner="<owner>" -F repo="<repo>" -F number=<n>
+     ```
+     Filter to threads where `isResolved` is `false` and treat each as one triage item (use the first comment's body + path:line as the title context, link to the comment URL).
+   - Also pull top-level PR conversation comments via `gh api repos/<owner>/<repo>/issues/<n>/comments` for issue-level remarks not attached to a code line. These have no resolved/unresolved state — include them all and let the user mark anything stale.
    
    If `gh` is not installed or not authenticated, log once: `(skipping PR comments — gh not configured)` and continue.
 
