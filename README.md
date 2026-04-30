@@ -73,7 +73,16 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 
 | Command | What it does |
 |---------|--------------|
+| [`/init-workshop`](commands/init-workshop.md) | Set up the workshop's folder convention in any project, asking before each addition. Updates `CLAUDE.md` so future agents know where to write. |
+| [`/plan`](commands/plan.md) | Develop a plan in plan-mode-like behaviour, then persist the approved result to `docs/plans/<slug>.md` with frontmatter and back-links. |
+| [`/solution`](commands/solution.md) | Capture or advance a solution doc through `decided` → `in-progress` → `outcome`. One file per piece of work, status tracked in frontmatter. |
 | [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
+
+## Agents shipped
+
+| Agent | What it does |
+|-------|--------------|
+| [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
 
 ## Install
 
@@ -82,19 +91,21 @@ Clone the repo and run the installer:
 ```bash
 git clone https://github.com/adamhulme/the-workshop.git
 cd the-workshop
-./install.sh                # user-scoped → ~/.claude/commands/
-./install.sh --project      # project-scoped → ./.claude/commands/
+./install.sh                # user-scoped → ~/.claude/{commands,agents}/
+./install.sh --project      # project-scoped → ./.claude/{commands,agents}/
 ```
 
-Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete.
+Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool.
 
 ## Roadmap (loose)
 
-- `/research` — synthesise product context (markets, competitors, prior art) into `docs/research/context/`
-- `/brainstorm` — structured ideation into `docs/brainstorms/`, pulling from `docs/research/`
-- `/plan` — wraps Claude Code plan mode and lands the result in `docs/plans/`
-- `/solution` — promote a finished bug fix or feature into `docs/solutions/` for institutional memory
-- `/triage` — sweep `todos/` and surface what to do next
+- `/research` — synthesise external context (Jira, Confluence, web, files) into `docs/research/`
+- `/sanitise` — pre-publish gate that scans for client/internal references using a hybrid denylist + LLM detection model
+- `/design-capture` — read an existing app's flows, surface design inconsistencies, validate the recommended approach with the user, write `DESIGN.md`
+- `/brainstorm` — multi-perspective ideation across four fixed lenses (user, ops, scope, risk), pulling from `docs/research/`
+- `/triage` — sweep `todos/`, open PR comments, and (if available) the Jira queue; rank the top moves
+- `decision-distiller` (agent) — distil messy multi-thread discussion into ADR-shaped sections
+- `pr-reviewer` (agent) — independent diff reviewer using the rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup
 
 These ship when they earn their place — when the workflow has been used enough times to know what the skill should do.
 
