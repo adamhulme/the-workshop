@@ -50,7 +50,7 @@ project/
 
 ### Customer interviews → `docs/research/interviews/<participant-id>.md`
 
-Long-form interview transcripts get converted (manually via the Atlassian Rovo connector, or via a future synthesis skill) into a structured AI-friendly format:
+Long-form interview transcripts get converted (manually, or via [`/research`](commands/research.md)) into a structured AI-friendly format:
 
 ````markdown
 ---
@@ -76,6 +76,11 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/init-workshop`](commands/init-workshop.md) | Set up the workshop's folder convention in any project, asking before each addition. Updates `CLAUDE.md` so future agents know where to write. |
 | [`/plan`](commands/plan.md) | Develop a plan in plan-mode-like behaviour, then persist the approved result to `docs/plans/<slug>.md` with frontmatter and back-links. |
 | [`/solution`](commands/solution.md) | Capture or advance a solution doc through `decided` → `in-progress` → `outcome`. One file per piece of work, status tracked in frontmatter. |
+| [`/research`](commands/research.md) | Pull source material from Jira, Confluence, a web URL, a file, or pasted text. Synthesise into structured `### Insight:` blocks under `docs/research/`. |
+| [`/sanitise`](commands/sanitise.md) | Pre-publish gate. Hybrid denylist + LLM scan for client/internal references; auto-fixes known matches, prompts on novel ones. Audit trail to `docs/solutions/`. |
+| [`/design-capture`](commands/design-capture.md) | Read an existing app's frontend, surface design inconsistencies, validate the recommended approach with the user, write `DESIGN.md`. |
+| [`/brainstorm`](commands/brainstorm.md) | Multi-perspective ideation across four fixed lenses (user, ops, scope, risk). Pulls relevant `docs/research/` files first; surfaces tensions explicitly. |
+| [`/triage`](commands/triage.md) | Sweep `todos/`, open PR comments, and (if available) the Jira queue. Categorise, rank by leverage, surface the top three moves. |
 | [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
 
 ## Agents shipped
@@ -83,6 +88,8 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | Agent | What it does |
 |-------|--------------|
 | [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
+| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Used by `/solution` and `/brainstorm`. |
+| [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
 
 ## Install
 
@@ -97,17 +104,9 @@ cd the-workshop
 
 Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool.
 
-## Roadmap (loose)
+## Roadmap
 
-- `/research` — synthesise external context (Jira, Confluence, web, files) into `docs/research/`
-- `/sanitise` — pre-publish gate that scans for client/internal references using a hybrid denylist + LLM detection model
-- `/design-capture` — read an existing app's flows, surface design inconsistencies, validate the recommended approach with the user, write `DESIGN.md`
-- `/brainstorm` — multi-perspective ideation across four fixed lenses (user, ops, scope, risk), pulling from `docs/research/`
-- `/triage` — sweep `todos/`, open PR comments, and (if available) the Jira queue; rank the top moves
-- `decision-distiller` (agent) — distil messy multi-thread discussion into ADR-shaped sections
-- `pr-reviewer` (agent) — independent diff reviewer using the rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup
-
-These ship when they earn their place — when the workflow has been used enough times to know what the skill should do.
+The initial roadmap shipped. Future skills land here as the practice produces them — when a workflow has been used enough times to know what its skill should do.
 
 ## License
 
