@@ -110,6 +110,18 @@ Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude 
 
 `install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into the install target so that `update.sh` can later diff cleanly against upstream and prune skills the workshop has removed.
 
+## Optional integrations
+
+The workshop runs without any of these. Each one unlocks a specific capability — the affected skills degrade gracefully (with a one-line note) when the integration isn't present.
+
+| Integration | What unlocks | Used by |
+|-------------|--------------|---------|
+| [**Codex CLI**](https://github.com/openai/codex) on `PATH` | Cross-model independent second opinion. Runs as `codex exec --skip-git-repo-check`; falls back to a `general-purpose` Agent if missing. | `/plan-eng-review`, `/plan-design-review` |
+| [**Atlassian MCP**](https://www.atlassian.com/platform/remote-mcp-server) configured in Claude Code | Pull Jira issues / Confluence pages directly into research, sweep your Jira queue. Skills prompt for paste-in fallback if missing. | `/research` (Jira ID, Confluence URL/ID), `/triage` (Jira queue sweep) |
+| **`gh` CLI** authenticated | Read PR titles/bodies and unresolved review threads on the current branch. Skills skip the relevant pass if missing. | `/triage` (PR-comment sweep), `/changelog` (PR enrichment) |
+
+None are hard dependencies — the workshop is opinionated about Claude Code as the runtime, not about which model you bring as a second voice or which issue tracker you use. Install the ones that match your workflow.
+
 ## Starter guide — your first run
 
 A short tour of the compounding loop in a project you actually work on. Pick a small real task to anchor it; the artefacts you generate become reusable context for the next time you sit down.
