@@ -9,16 +9,23 @@ User arguments: $ARGUMENTS
 
 ## Steps
 
-1. **Resolve the slug.** Use `$ARGUMENTS` as the slug. If empty, prompt: `What's the slug for this solution? (e.g. feature-flags-v1)`. Target path is `docs/solutions/<slug>.md`.
+1. **Resolve and validate the slug.** Take `$ARGUMENTS` as the candidate slug. If empty, prompt: `What's the slug for this solution? (e.g. feature-flags-v1)`.
+
+   Validate before using it as a path:
+   - **Reject** if it contains path separators (`/`, `\`), `..` segments, or starts with `/`, `~`, or a Windows drive letter (e.g. `C:`). These would write outside `docs/solutions/`.
+   - **Reject** characters that are illegal in filenames on common filesystems (newlines, NUL, `:`, `*`, `?`, `"`, `<`, `>`, `|`).
+   - If the slug isn't already kebab-case (lowercase ASCII alphanumerics + hyphens), normalise: lowercase, replace runs of whitespace/underscores/punctuation with `-`, collapse repeated hyphens, trim leading/trailing hyphens. Show the normalised result and confirm: `Use slug <normalised>? (y / paste alternative)`.
+   
+   On rejection, ask the user for a clean slug and re-validate. Target path is then `docs/solutions/<slug>.md`.
 
 2. **Confirm target directory.** If `docs/solutions/` is missing, mention `/init-workshop` and offer to create it inline.
 
 3. **Determine mode.**
    - **File doesn't exist** → new doc, write at `decided` stage (step 4).
-   - **File exists** → read its frontmatter `status` field, then prompt: `This doc is at status <X>. Advance to <next>, or update the existing stage in place? (advance/update)`.
-     - `decided` → next is `in-progress`
-     - `in-progress` → next is `outcome`
-     - `outcome` → no further stage; prompt: `This doc is already at outcome. Append a follow-up note instead? (y/n)`.
+   - **File exists** → read its frontmatter `status` field, then prompt:
+     - For `decided` or `in-progress`: `This doc is at status <X>. Advance to <next>, or update the existing <X> section in place? (advance/update)`.
+     - For `outcome`: `This doc is already at outcome. Append a dated follow-up note? (y/n)`. On `n`, exit without changes.
+   - Stage transitions are linear: `decided` → `in-progress` → `outcome`. There is no rewind via this skill — if a stage was advanced in error, fix the frontmatter manually before re-running.
 
 4. **Decided stage** (new file). Prompt for or infer from context:
    - **Problem** — one paragraph
@@ -51,7 +58,13 @@ User arguments: $ARGUMENTS
    
    Update frontmatter: `status: outcome`, add `shipped: <YYYY-MM-DD>`.
 
-7. **Report.** Print the path, the new status, and suggested next move:
+7. **Update in place** (when the user picks `update` instead of `advance` in step 3, or `y` to append a follow-up to an `outcome` doc).
+   - Always preserve the existing frontmatter `status`, `slug`, and original `date`. Add or update `last_modified: <YYYY-MM-DD>`.
+   - **`decided` doc** → ask which sections to revise (`Problem` / `Options considered` / `Chosen approach` / `Rationale` — multi-select). Replace only the chosen section bodies; leave untouched sections byte-for-byte unchanged. Do not change `status`.
+   - **`in-progress` doc** → revise the `## In progress` section in place. Replace its body with the latest state, capturing any new commits/PRs since it was first written. Do not change `status`. Do not modify `## Problem` / `## Options considered` / `## Chosen approach` / `## Rationale` (decided-stage history is immutable from this stage).
+   - **`outcome` doc, follow-up note** → append a new dated subsection `### Follow-up <YYYY-MM-DD>` under the existing `## Outcome` section. Do not modify earlier outcome content. Update `last_modified` only.
+
+8. **Report.** Print the path, the new status, and suggested next move:
    - From `decided`: "Consider `/plan <slug>` to lock in the implementation plan."
    - From `in-progress`: "Run `/solution <slug>` again once shipped to capture the outcome."
    - From `outcome`: "Consider `/changelog` to surface this in the next release narrative."

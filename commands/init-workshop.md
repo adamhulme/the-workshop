@@ -14,7 +14,7 @@ User arguments: $ARGUMENTS
 
 3. **Ask before creating todos/.** Prompt: `Create todos/ for triage findings and follow-ups? (y/n)`. On `y`, `mkdir -p todos`.
 
-4. **Ask before creating docs/changelog.md.** Prompt: `Create docs/changelog.md (used by /changelog)? (y/n)`. On `y`, write the file with a single line: `# Changelog`. If it already exists, skip silently.
+4. **Ask before creating docs/changelog.md.** Prompt: `Create docs/changelog.md (used by /changelog)? (y/n)`. On `y`, ensure the parent `docs/` directory exists first (`mkdir -p docs`) — this matters when the user declined the docs subtree in step 2 but still wants a changelog. Then write the file with a single line: `# Changelog`. If it already exists, skip silently.
 
 5. **Update CLAUDE.md.**
    - If `CLAUDE.md` does not exist: prompt `No CLAUDE.md found — create one with the workshop conventions section? (y/n)`. On `y`, create the file containing only the section in step 5b.
