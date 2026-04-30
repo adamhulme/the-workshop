@@ -104,6 +104,32 @@ cd the-workshop
 
 Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool.
 
+`install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into the install target so that `update.sh` can later diff cleanly against upstream and prune skills the workshop has removed.
+
+## Updating
+
+Pull the latest skills with `update.sh`:
+
+```bash
+./update.sh                # auto-detects user vs project from the manifest
+./update.sh --user
+./update.sh --project
+```
+
+Or via curl-pipe-bash from anywhere:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/update.sh | bash
+```
+
+What it does:
+
+- Runs `install.sh` against the latest `main`, overwriting installed skill files (silent overwrite — if you've edited a skill locally, fork it before updating).
+- Diffs the previous manifest against the new one and **prunes** any skill that was installed by an earlier release but is no longer shipped. Files the workshop never installed are left alone.
+- Reports the version transition (`Update complete: 0.1.0 → 0.2.0 (user scope).`).
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release. The current version is in [VERSION](VERSION).
+
 ## Roadmap
 
 The initial roadmap shipped. Future skills land here as the practice produces them — when a workflow has been used enough times to know what its skill should do.

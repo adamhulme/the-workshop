@@ -61,6 +61,7 @@ fi
 
 cmd_count=0
 agent_count=0
+MANIFEST_LINES=()
 
 install_dir() {
   local kind="$1"
@@ -72,6 +73,7 @@ install_dir() {
     [[ -e "$f" ]] || continue
     cp "$f" "$target_dir/"
     echo "  installed $kind: $(basename "$f")"
+    MANIFEST_LINES+=("$kind/$(basename "$f")")
     if [[ "$kind" == "commands" ]]; then
       cmd_count=$((cmd_count + 1))
     else
@@ -88,6 +90,25 @@ if [[ "$cmd_count" -eq 0 && "$agent_count" -eq 0 ]]; then
   exit 1
 fi
 
+# Read source version (from VERSION file at repo root). Default to "unknown"
+# if the file is missing — keeps install.sh resilient against detached source
+# trees but won't match a tagged release.
+WORKSHOP_VERSION="unknown"
+if [[ -f "$SOURCE_BASE/VERSION" ]]; then
+  WORKSHOP_VERSION="$(tr -d '[:space:]' < "$SOURCE_BASE/VERSION")"
+fi
+
+# Write the manifest + version file. update.sh reads these to diff and prune.
+mkdir -p "$TARGET_BASE"
+{
+  echo "# the-workshop install manifest — managed by install.sh / update.sh"
+  echo "# Each line below is a relative path under the install target."
+  printf '%s\n' "${MANIFEST_LINES[@]}" | LC_ALL=C sort
+} > "$TARGET_BASE/.workshop-manifest"
+
+echo "$WORKSHOP_VERSION" > "$TARGET_BASE/.workshop-version"
+echo "scope=$SCOPE" > "$TARGET_BASE/.workshop-scope"
+
 echo ""
-echo "Installed $cmd_count command(s) and $agent_count agent(s) ($SCOPE scope)."
+echo "Installed $cmd_count command(s) and $agent_count agent(s) ($SCOPE scope, version $WORKSHOP_VERSION)."
 echo "Restart Claude Code; commands appear in /-autocomplete, agents are dispatchable via the Agent tool."
