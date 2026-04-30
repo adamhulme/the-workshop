@@ -88,7 +88,7 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | Agent | What it does |
 |-------|--------------|
 | [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
-| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Used by `/solution` and `/brainstorm`. |
+| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Pairs well with `/solution` and `/brainstorm` — dispatchable from any skill, or directly from your own review of a long discussion. |
 | [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
 
 ## Install
@@ -152,13 +152,15 @@ Walks the doc through `decided` → `in-progress` → `outcome` over time. One f
 
 ### 5. See the loop close
 
-After a few solutions reach `outcome`:
+After a few PRs have merged into `main`:
 
 ```
 /changelog
 ```
 
-Synthesises a release-shaped narrative from recent merges and `outcome` docs into `docs/changelog.md`. Now the next person (or the next you) opens the repo and the trail is right there.
+Reads recent merges from `git log`, enriches each with the matching PR body (via `gh`) and any matching `docs/plans/<slug>.md`, then synthesises a release-shaped narrative under a dated heading in `docs/changelog.md`. Now the next person (or the next you) opens the repo and the trail is right there.
+
+A natural pairing: when a `/solution` reaches `outcome`, also run `/changelog` so the narrative trail catches up.
 
 ### Where to go next
 
@@ -167,7 +169,7 @@ Synthesises a release-shaped narrative from recent merges and `outcome` docs int
 - **About to flip a private repo public?** `/sanitise` does a denylist + LLM pass for client/internal references, auto-fixes known matches, prompts on novel ones, and audits the run to `docs/solutions/`.
 - **Auditing an existing app's design?** `/design-capture` reads the frontend, surfaces inconsistencies against a synthesised system, validates the recommended approach with you, and writes `DESIGN.md`.
 
-The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool; you don't usually call them directly. Most users meet `decision-distiller` through `/solution` and `pr-reviewer` through their own review flow.
+The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool, or directly when you want a focused second pass. They're not auto-invoked by the shipped skills today — pair them with the skills above as the workflow calls for it (e.g. dispatch `decision-distiller` over a long PR thread before drafting the matching `/solution`, or run `pr-reviewer` against a diff before merging).
 
 ## Roadmap
 
