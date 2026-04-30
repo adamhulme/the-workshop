@@ -29,9 +29,15 @@ User arguments: $ARGUMENTS
    - **Pasted text**: use what the user provided.
 
 5. **Determine output type.**
-   - If `--type=interview` is set, or the source is recognisably an interview transcript, target `docs/research/interviews/<participant-slug>.md` with the README's interview frontmatter (`participant`, `date`, `focus`).
-   - Otherwise target `docs/research/context/<slug>.md` with frontmatter (`source`, `date`, `topic`).
-   - Confirm the target path with the user before writing.
+   - If `--type=interview` is set, or the source is recognisably an interview transcript, derive `<participant-slug>` from the participant name and target `docs/research/interviews/<participant-slug>.md` with the README's interview frontmatter (`participant`, `date`, `focus`).
+   - Otherwise derive `<slug>` from the Jira summary, page title, URL, or topic and target `docs/research/context/<slug>.md` with frontmatter (`source`, `date`, `topic`).
+
+   Validate the derived slug before using it as a path (Jira/Confluence/web titles often contain path separators or filename-hostile characters):
+   - **Reject** if it contains path separators (`/`, `\`), `..` segments, or starts with `/`, `~`, or a Windows drive letter (e.g. `C:`). These would write outside `docs/research/`.
+   - **Reject** characters that are illegal in filenames on common filesystems (newlines, NUL, `:`, `*`, `?`, `"`, `<`, `>`, `|`).
+   - Normalise to kebab-case: lowercase, replace runs of whitespace/underscores/punctuation with `-`, collapse repeated hyphens, trim leading/trailing hyphens. If normalisation altered the input, show the result and confirm: `Use slug <normalised>? (y / paste alternative)`.
+
+   On rejection, ask the user for a clean slug and re-validate. Then confirm the full target path with the user before writing.
 
 6. **Synthesise insights.** Read the fetched content and produce structured `### Insight:` blocks:
    ```
