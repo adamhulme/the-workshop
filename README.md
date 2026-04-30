@@ -84,8 +84,8 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
 | [`/team-init`](commands/team-init.md) | Scaffold a six-persona consultation team (product-strategist, user-advocate, domain-specialist, technical-architect, quality-risk, delivery-lead) into the project, filled from a project-context questionnaire. |
 | [`/consult`](commands/consult.md) | Multi-perspective consultation with the project's persona team — surfaces disagreements, runs targeted rebuttals, synthesises with tensions preserved. |
-| [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance, with an optional independent second-opinion agent. |
-| [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns before implementation. |
+| [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance — with an optional independent Codex second opinion (`codex exec`). |
+| [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns — with an optional adversarial Codex outside voice (`codex exec`). |
 
 ## Agents shipped
 

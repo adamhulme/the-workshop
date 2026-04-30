@@ -1,5 +1,5 @@
 ---
-description: Designer's eye plan review — score 8 design dimensions 0-10, surface gaps, and patch the plan before implementation
+description: Designer's eye plan review — score 8 design dimensions 0-10, surface gaps and AI-slop risk, with an optional adversarial Codex outside voice
 argument-hint: [path-to-plan-file]
 ---
 
@@ -91,9 +91,9 @@ Pick angles that genuinely differ — e.g. editorial-typographic, data-dense cal
 
 ## Step 5: Outside voice (optional)
 
-Ask once: "Want an adversarial design review from an independent voice before we finalise? (y/n)"
+Ask once: "Want an adversarial design review from Codex before we finalise? (y/n) (Requires `codex` on PATH.)"
 
-If yes, dispatch a single subagent (`subagent_type: general-purpose`) with this prompt:
+If yes, dispatch Codex via `Bash`: `codex exec --skip-git-repo-check "<prompt>"` with the prompt below. Codex provides a genuinely independent design read. If `codex` is not on PATH, fall back to an `Agent` call with `subagent_type: general-purpose`.
 
 > Read the plan at `<path>`. You are an independent senior product designer who has not seen any prior review. Find every place this design will look generic, AI-generated, or careless. Specifically check for:
 >
@@ -110,7 +110,7 @@ If yes, dispatch a single subagent (`subagent_type: general-purpose`) with this 
 >
 > For each finding: what's wrong, what ships if it's not fixed, the specific fix. Be opinionated. No hedging.
 
-Present the findings under a `## Outside Voice` header. Surface them as new issues to the user — keep / fix / defer each one.
+Present the findings under a `## Outside Voice (Codex)` header. Surface them as new issues to the user — keep / fix / defer each one.
 
 ## Step 6: Write the output
 

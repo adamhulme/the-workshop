@@ -1,5 +1,5 @@
 ---
-description: Engineering manager-mode plan review — scope, architecture, code quality, tests, performance — with optional outside voice
+description: Engineering manager-mode plan review — scope, architecture, code quality, tests, performance — with an optional independent Codex second opinion
 argument-hint: [path/to/plan.md]
 ---
 
@@ -143,9 +143,9 @@ Evaluate:
 
 After all sections complete, offer one independent second opinion. Ask:
 
-> All review sections are complete. Want an independent second opinion? A fresh agent can challenge the plan for logical gaps, feasibility risks, and blind spots. Takes about 2 minutes.
+> All review sections are complete. Want an independent Codex second opinion? Codex will challenge the plan for logical gaps, feasibility risks, and blind spots. Takes about 2 minutes. (Requires `codex` on PATH.)
 
-If yes, dispatch a single Agent (`subagent_type: general-purpose`) with this prompt:
+If yes, dispatch Codex via `Bash`: `codex exec --skip-git-repo-check "<prompt>"` with the prompt below. Codex's separate context makes it the right tool for the cross-model second opinion. If `codex` is not on PATH, fall back to an `Agent` call with `subagent_type: general-purpose`.
 
 ```
 You are a brutally honest technical reviewer examining a development plan that has
@@ -159,7 +159,7 @@ THE PLAN:
 <plan content>
 ```
 
-Present the agent's output verbatim under an `OUTSIDE VOICE:` header. Surface any disagreements with earlier review findings as `CROSS-MODEL TENSION:` blocks — present both sides neutrally and ask the user to decide. Do not auto-incorporate outside voice findings; the user approves each one.
+Present Codex's output verbatim under an `OUTSIDE VOICE (Codex):` header. Surface any disagreements with earlier review findings as `CROSS-MODEL TENSION:` blocks — present both sides neutrally and ask the user to decide. Do not auto-incorporate outside voice findings; the user approves each one.
 
 If the user skips outside voice, note "Outside voice skipped" and continue.
 
