@@ -1,6 +1,6 @@
 ---
 description: Generate an engaging changelog entry from recent merges to main
-argument-hint: [--since=<git-rev>]
+argument-hint: [--since=<git-rev>] [--version=<vX.Y>]
 ---
 
 Generate a changelog entry by reading recent merge commits and synthesising narrative entries.
@@ -16,9 +16,17 @@ User arguments: $ARGUMENTS
    - Else read `docs/changelog.md`. The newest entry's footer should record its source commit on a line like `Source: [#N](url) · <short-hash>`. Use that hash as the lower bound.
    - Else default to `HEAD~20`.
 
-3. **List merges.** Run `git log --merges <since>..HEAD --pretty=format:'%H|%s|%ai|%an'`. If the list is empty, respond: "No new merges since `<since>`. Nothing to add to the changelog." Stop here.
+2a. **Determine the version number for this batch.**
+   - If `$ARGUMENTS` contains `--version=<vX.Y>`, use it verbatim.
+   - Else read `docs/changelog.md` and find the most recent heading matching `## v<MAJOR>.<MINOR>`. Bump the minor (e.g. `v1.3` → `v1.4`) and use that as the default.
+   - Else (no prior versioned heading) default to `v1.0`. Do not prompt — just pick it and mention the assumed version in the final report so the user can override on the next run.
 
-4. **Enrich each merge.** For each merge commit:
+3. **List landed PRs.** Some repos use merge commits; others squash. Cover both:
+   - First try `git log --merges <since>..HEAD --pretty=format:'%H|%s|%ai|%an'` (merge-commit style — subjects look like `Merge pull request #N from ...`).
+   - If that's empty, try `git log <since>..HEAD --pretty=format:'%H|%s|%ai|%an' --grep='(#[0-9]\+)$' -E` (squash style — subjects end with `(#N)`).
+   - If both are empty, respond: "No new merges since `<since>`. Nothing to add to the changelog." Stop here.
+
+4. **Enrich each landed PR.** For each commit from step 3:
    - Parse the PR number from the subject (`Merge pull request #N` or trailing `(#N)`).
    - If a PR number is found and `gh` is installed (`gh --version`): run `gh pr view <N> --json title,body,mergedAt,author,url`.
    - If `gh` is unavailable or the call fails: fall back to `git show --stat <hash>` for the diff summary and commit body.
@@ -32,7 +40,7 @@ User arguments: $ARGUMENTS
 
    Tone: confident, narrative, slightly informal. No marketing fluff. No emoji.
 
-6. **Write.** Prepend the new content under a `## YYYY-MM-DD` heading (today's date) at the top of `docs/changelog.md`. If the file doesn't exist, create it with a `# Changelog` H1 header first. Newest dated section sits above any existing dated sections.
+6. **Write.** Prepend the new content under a `## <version> — YYYY-MM-DD` heading (e.g. `## v1.4 — 2026-04-30`) at the top of `docs/changelog.md`. If the file doesn't exist, create it with a `# Changelog` H1 header first. Newest version sits above any existing versioned sections.
 
 7. **Report.** Tell the user how many entries were added, the path written to, and (if `gh` was unavailable) that synthesis used commit messages only.
 
