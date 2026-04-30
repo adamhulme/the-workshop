@@ -88,7 +88,7 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | Agent | What it does |
 |-------|--------------|
 | [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
-| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Used by `/solution` and `/brainstorm`. |
+| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Pairs well with `/solution` and `/brainstorm` — dispatchable from any skill, or directly from your own review of a long discussion. |
 | [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
 
 ## Install
@@ -103,6 +103,73 @@ cd the-workshop
 ```
 
 Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool.
+
+## Starter guide — your first run
+
+A short tour of the compounding loop in a project you actually work on. Pick a small real task to anchor it; the artefacts you generate become reusable context for the next time you sit down.
+
+### 1. Bootstrap the folders
+
+In a Claude Code session, in the project root:
+
+```
+/init-workshop
+```
+
+Asks before each addition. Creates `docs/research/{interviews,context}/`, `docs/brainstorms/`, `docs/plans/`, `docs/solutions/`, `docs/changelog.md`, and `todos/`, then adds a `## Workshop conventions` section to `CLAUDE.md` so future agents know where to write.
+
+### 2. Capture some context
+
+Pull in a real input — a Jira ticket, a Confluence page, a blog post, or paste freeform notes when prompted:
+
+```
+/research PROJ-1234
+/research https://example.com/article
+/research                    # empty → paste text inline
+```
+
+Lands at `docs/research/context/<slug>.md` (or `interviews/<participant-slug>.md` with `--type=interview`) as a structured set of `### Insight:` blocks. Future skills read these without you re-pasting context every session.
+
+### 3. Plan a real task
+
+Pick a piece of work you'd actually do this week:
+
+```
+/plan Add a queue-depth metric to the worker dashboard
+```
+
+Drafts a plan in plan-mode-like behaviour, asks clarifying questions, persists to `docs/plans/<slug>.md` on approval. If any `docs/research/` files share keywords with the task, they're back-linked automatically.
+
+### 4. Capture the decision as work progresses
+
+When you start implementing — even partially:
+
+```
+/solution queue-depth-metric
+```
+
+Walks the doc through `decided` → `in-progress` → `outcome` over time. One file per piece of work; status tracked in frontmatter. Re-run as the work progresses to advance the stage or update the current stage in place.
+
+### 5. See the loop close
+
+After a few PRs have merged into `main`:
+
+```
+/changelog
+```
+
+Reads recent merges from `git log`, enriches each with the matching PR body (via `gh`) and any matching `docs/plans/<slug>.md`, then synthesises a release-shaped narrative under a dated heading in `docs/changelog.md`. Now the next person (or the next you) opens the repo and the trail is right there.
+
+A natural pairing: when a `/solution` reaches `outcome`, also run `/changelog` so the narrative trail catches up.
+
+### Where to go next
+
+- **Stuck on what to do next?** `/triage` sweeps `todos/`, unresolved PR review threads on the current branch, and (if the Atlassian MCP is configured) your Jira queue. Categorises and ranks the top three moves.
+- **Thorny multi-perspective decision?** `/brainstorm <topic>` runs four fixed lenses (user, ops, scope, risk) over the topic, grounded in any matching `docs/research/` files, and surfaces tensions explicitly.
+- **About to flip a private repo public?** `/sanitise` does a denylist + LLM pass for client/internal references, auto-fixes known matches, prompts on novel ones, and audits the run to `docs/solutions/`.
+- **Auditing an existing app's design?** `/design-capture` reads the frontend, surfaces inconsistencies against a synthesised system, validates the recommended approach with you, and writes `DESIGN.md`.
+
+The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool, or directly when you want a focused second pass. They're not auto-invoked by the shipped skills today — pair them with the skills above as the workflow calls for it (e.g. dispatch `decision-distiller` over a long PR thread before drafting the matching `/solution`, or run `pr-reviewer` against a diff before merging).
 
 ## Roadmap
 
