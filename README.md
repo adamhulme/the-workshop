@@ -104,6 +104,8 @@ cd the-workshop
 
 Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool.
 
+`install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into the install target so that `update.sh` can later diff cleanly against upstream and prune skills the workshop has removed.
+
 ## Starter guide — your first run
 
 A short tour of the compounding loop in a project you actually work on. Pick a small real task to anchor it; the artefacts you generate become reusable context for the next time you sit down.
@@ -170,6 +172,31 @@ A natural pairing: when a `/solution` reaches `outcome`, also run `/changelog` s
 - **Auditing an existing app's design?** `/design-capture` reads the frontend, surfaces inconsistencies against a synthesised system, validates the recommended approach with you, and writes `DESIGN.md`.
 
 The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool, or directly when you want a focused second pass. They're not auto-invoked by the shipped skills today — pair them with the skills above as the workflow calls for it (e.g. dispatch `decision-distiller` over a long PR thread before drafting the matching `/solution`, or run `pr-reviewer` against a diff before merging).
+
+## Updating
+
+Pull the latest skills with `update.sh`:
+
+```bash
+./update.sh                # auto-detects user vs project from the manifest
+./update.sh --user
+./update.sh --project
+```
+
+Or via curl-pipe-bash from anywhere:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/update.sh | bash
+```
+
+What it does:
+
+- **Always shallow-clones the latest `main` from origin** into a temp dir before installing — even when run from a local clone. A stale checkout never reinstalls itself. (If you want to install from a local checkout, run `install.sh` directly.)
+- Overwrites installed skill files (silent overwrite — if you've edited a skill locally, fork it before updating).
+- Diffs the previous manifest against the new one and **prunes** any skill that was installed by an earlier release but is no longer shipped. Manifest entries are validated against the expected `commands/*.md` or `agents/*.md` shape before any `rm`; anything outside that shape is logged and skipped, so a tampered manifest cannot be coerced into deleting files outside the install target. Files the workshop never installed are left alone.
+- Reports the version transition (`Update complete: 0.1.0 → 0.2.0 (user scope).`).
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release. The current version is in [VERSION](VERSION).
 
 ## Roadmap
 
