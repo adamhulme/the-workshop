@@ -14,6 +14,15 @@ A bump is reserved until the next release; in-progress work lives under `[Unrele
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-30
+
+### Added
+
+- `/consult` — multi-perspective team consultation. Discovers a six-persona team via `**/teams/*/team.yaml`, dispatches personas in parallel as Agent subagents, surfaces tensions, runs targeted rebuttals, and synthesises a recommendation that preserves disagreements rather than smoothing them. Flags: `--quick <role>`, `--context <file>`, `--team <path>`, `--group <name>`, `--all`, `--opus`.
+- `/team-init` — scaffolds a six-persona consultation team into the project. Interactive questionnaire (product name, primary users, key tech, domain reality, commercial boundary, top risks) fills generic templates for `product-strategist`, `user-advocate`, `domain-specialist`, `technical-architect`, `quality-risk`, and `delivery-lead`. Writes `team.yaml`, six persona files, and an `agent-team-spec.md` rationale doc. Appends a `## Team conventions` section to `CLAUDE.md`.
+- `/plan-eng-review` — engineering-manager-mode plan critique. Walks scope challenge, architecture review (boundaries, dependencies, contracts, data flow), code quality (DRY, naming, refactor pressure), test review (coverage, failure modes, ASCII diagram), and performance review. Optional independent second-opinion via parallel Agent dispatch. Findings land in the plan file or `TODOS.md`.
+- `/plan-design-review` — designer's-eye plan critique. Scores eight dimensions (color, typography, spacing, components, accessibility, interaction, mobile responsiveness, visual hierarchy) 0–10 with current → target → gap framing. Optional parallel variant generation via Agent subagents. Embeds AI-slop pattern checklist (default font stacks, three-column grids, centred everything) for adversarial review.
+
 ## [0.2.0] — 2026-04-30
 
 ### Added

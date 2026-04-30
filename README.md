@@ -82,6 +82,10 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/brainstorm`](commands/brainstorm.md) | Multi-perspective ideation across four fixed lenses (user, ops, scope, risk). Pulls relevant `docs/research/` files first; surfaces tensions explicitly. |
 | [`/triage`](commands/triage.md) | Sweep `todos/`, open PR comments, and (if available) the Jira queue. Categorise, rank by leverage, surface the top three moves. |
 | [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
+| [`/team-init`](commands/team-init.md) | Scaffold a six-persona consultation team (product-strategist, user-advocate, domain-specialist, technical-architect, quality-risk, delivery-lead) into the project, filled from a project-context questionnaire. |
+| [`/consult`](commands/consult.md) | Multi-perspective consultation with the project's persona team — surfaces disagreements, runs targeted rebuttals, synthesises with tensions preserved. |
+| [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance, with an optional independent second-opinion agent. |
+| [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns before implementation. |
 
 ## Agents shipped
 
@@ -170,6 +174,7 @@ A natural pairing: when a `/solution` reaches `outcome`, also run `/changelog` s
 - **Thorny multi-perspective decision?** `/brainstorm <topic>` runs four fixed lenses (user, ops, scope, risk) over the topic, grounded in any matching `docs/research/` files, and surfaces tensions explicitly.
 - **About to flip a private repo public?** `/sanitise` does a denylist + LLM pass for client/internal references, auto-fixes known matches, prompts on novel ones, and audits the run to `docs/solutions/`.
 - **Auditing an existing app's design?** `/design-capture` reads the frontend, surfaces inconsistencies against a synthesised system, validates the recommended approach with you, and writes `DESIGN.md`.
+- **Want a six-perspective sanity check?** `/team-init` scaffolds a consultation team into the project (product, user, domain, architecture, risk, delivery). `/consult <question>` then dispatches all six personas in parallel and surfaces tensions. Pair with `/plan-eng-review` or `/plan-design-review` for single-perspective plan critique.
 
 The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool, or directly when you want a focused second pass. They're not auto-invoked by the shipped skills today — pair them with the skills above as the workflow calls for it (e.g. dispatch `decision-distiller` over a long PR thread before drafting the matching `/solution`, or run `pr-reviewer` against a diff before merging).
 
