@@ -50,7 +50,7 @@ project/
 
 ### Customer interviews → `docs/research/interviews/<participant-id>.md`
 
-Long-form interview transcripts get converted (manually via the Atlassian Rovo connector, or via a future synthesis skill) into a structured AI-friendly format:
+Long-form interview transcripts get converted (manually, or via [`/research`](commands/research.md)) into a structured AI-friendly format:
 
 ````markdown
 ---
@@ -76,6 +76,11 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/init-workshop`](commands/init-workshop.md) | Set up the workshop's folder convention in any project, asking before each addition. Updates `CLAUDE.md` so future agents know where to write. |
 | [`/plan`](commands/plan.md) | Develop a plan in plan-mode-like behaviour, then persist the approved result to `docs/plans/<slug>.md` with frontmatter and back-links. |
 | [`/solution`](commands/solution.md) | Capture or advance a solution doc through `decided` → `in-progress` → `outcome`. One file per piece of work, status tracked in frontmatter. |
+| [`/research`](commands/research.md) | Pull source material from Jira, Confluence, a web URL, a file, or pasted text. Synthesise into structured `### Insight:` blocks under `docs/research/`. |
+| [`/sanitise`](commands/sanitise.md) | Pre-publish gate. Hybrid denylist + LLM scan for client/internal references; auto-fixes known matches, prompts on novel ones. Audit trail to `docs/solutions/`. |
+| [`/design-capture`](commands/design-capture.md) | Read an existing app's frontend, surface design inconsistencies, validate the recommended approach with the user, write `DESIGN.md`. |
+| [`/brainstorm`](commands/brainstorm.md) | Multi-perspective ideation across four fixed lenses (user, ops, scope, risk). Pulls relevant `docs/research/` files first; surfaces tensions explicitly. |
+| [`/triage`](commands/triage.md) | Sweep `todos/`, open PR comments, and (if available) the Jira queue. Categorise, rank by leverage, surface the top three moves. |
 | [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
 
 ## Agents shipped
@@ -83,6 +88,8 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | Agent | What it does |
 |-------|--------------|
 | [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
+| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Pairs well with `/solution` and `/brainstorm` — dispatchable from any skill, or directly from your own review of a long discussion. |
+| [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
 
 ## Install
 
@@ -97,17 +104,103 @@ cd the-workshop
 
 Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool.
 
-## Roadmap (loose)
+`install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into the install target so that `update.sh` can later diff cleanly against upstream and prune skills the workshop has removed.
 
-- `/research` — synthesise external context (Jira, Confluence, web, files) into `docs/research/`
-- `/sanitise` — pre-publish gate that scans for client/internal references using a hybrid denylist + LLM detection model
-- `/design-capture` — read an existing app's flows, surface design inconsistencies, validate the recommended approach with the user, write `DESIGN.md`
-- `/brainstorm` — multi-perspective ideation across four fixed lenses (user, ops, scope, risk), pulling from `docs/research/`
-- `/triage` — sweep `todos/`, open PR comments, and (if available) the Jira queue; rank the top moves
-- `decision-distiller` (agent) — distil messy multi-thread discussion into ADR-shaped sections
-- `pr-reviewer` (agent) — independent diff reviewer using the rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup
+## Starter guide — your first run
 
-These ship when they earn their place — when the workflow has been used enough times to know what the skill should do.
+A short tour of the compounding loop in a project you actually work on. Pick a small real task to anchor it; the artefacts you generate become reusable context for the next time you sit down.
+
+### 1. Bootstrap the folders
+
+In a Claude Code session, in the project root:
+
+```
+/init-workshop
+```
+
+Asks before each addition. Creates `docs/research/{interviews,context}/`, `docs/brainstorms/`, `docs/plans/`, `docs/solutions/`, `docs/changelog.md`, and `todos/`, then adds a `## Workshop conventions` section to `CLAUDE.md` so future agents know where to write.
+
+### 2. Capture some context
+
+Pull in a real input — a Jira ticket, a Confluence page, a blog post, or paste freeform notes when prompted:
+
+```
+/research PROJ-1234
+/research https://example.com/article
+/research                    # empty → paste text inline
+```
+
+Lands at `docs/research/context/<slug>.md` (or `interviews/<participant-slug>.md` with `--type=interview`) as a structured set of `### Insight:` blocks. Future skills read these without you re-pasting context every session.
+
+### 3. Plan a real task
+
+Pick a piece of work you'd actually do this week:
+
+```
+/plan Add a queue-depth metric to the worker dashboard
+```
+
+Drafts a plan in plan-mode-like behaviour, asks clarifying questions, persists to `docs/plans/<slug>.md` on approval. If any `docs/research/` files share keywords with the task, they're back-linked automatically.
+
+### 4. Capture the decision as work progresses
+
+When you start implementing — even partially:
+
+```
+/solution queue-depth-metric
+```
+
+Walks the doc through `decided` → `in-progress` → `outcome` over time. One file per piece of work; status tracked in frontmatter. Re-run as the work progresses to advance the stage or update the current stage in place.
+
+### 5. See the loop close
+
+After a few PRs have merged into `main`:
+
+```
+/changelog
+```
+
+Reads recent merges from `git log`, enriches each with the matching PR body (via `gh`) and any matching `docs/plans/<slug>.md`, then synthesises a release-shaped narrative under a dated heading in `docs/changelog.md`. Now the next person (or the next you) opens the repo and the trail is right there.
+
+A natural pairing: when a `/solution` reaches `outcome`, also run `/changelog` so the narrative trail catches up.
+
+### Where to go next
+
+- **Stuck on what to do next?** `/triage` sweeps `todos/`, unresolved PR review threads on the current branch, and (if the Atlassian MCP is configured) your Jira queue. Categorises and ranks the top three moves.
+- **Thorny multi-perspective decision?** `/brainstorm <topic>` runs four fixed lenses (user, ops, scope, risk) over the topic, grounded in any matching `docs/research/` files, and surfaces tensions explicitly.
+- **About to flip a private repo public?** `/sanitise` does a denylist + LLM pass for client/internal references, auto-fixes known matches, prompts on novel ones, and audits the run to `docs/solutions/`.
+- **Auditing an existing app's design?** `/design-capture` reads the frontend, surfaces inconsistencies against a synthesised system, validates the recommended approach with you, and writes `DESIGN.md`.
+
+The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool, or directly when you want a focused second pass. They're not auto-invoked by the shipped skills today — pair them with the skills above as the workflow calls for it (e.g. dispatch `decision-distiller` over a long PR thread before drafting the matching `/solution`, or run `pr-reviewer` against a diff before merging).
+
+## Updating
+
+Pull the latest skills with `update.sh`:
+
+```bash
+./update.sh                # auto-detects user vs project from the manifest
+./update.sh --user
+./update.sh --project
+```
+
+Or via curl-pipe-bash from anywhere:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/update.sh | bash
+```
+
+What it does:
+
+- **Always shallow-clones the latest `main` from origin** into a temp dir before installing — even when run from a local clone. A stale checkout never reinstalls itself. (If you want to install from a local checkout, run `install.sh` directly.)
+- Overwrites installed skill files (silent overwrite — if you've edited a skill locally, fork it before updating).
+- Diffs the previous manifest against the new one and **prunes** any skill that was installed by an earlier release but is no longer shipped. Manifest entries are validated against the expected `commands/*.md` or `agents/*.md` shape before any `rm`; anything outside that shape is logged and skipped, so a tampered manifest cannot be coerced into deleting files outside the install target. Files the workshop never installed are left alone.
+- Reports the version transition (`Update complete: 0.1.0 → 0.2.0 (user scope).`).
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each release. The current version is in [VERSION](VERSION).
+
+## Roadmap
+
+The initial roadmap shipped. Future skills land here as the practice produces them — when a workflow has been used enough times to know what its skill should do.
 
 ## License
 
