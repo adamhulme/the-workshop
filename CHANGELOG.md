@@ -14,6 +14,10 @@ A bump is reserved until the next release; in-progress work lives under `[Unrele
 
 ## [Unreleased]
 
+### Added
+
+- `/browse` — orchestrates Playwright MCP (primary) or Chrome DevTools MCP (alternative) to drive a *visible* browser so the user can watch Claude verify a UI change or walk a user flow. Captures screenshots under `docs/research/interviews/<slug>-screenshots/` and writes a structured session note (`### Insight:` blocks reused from `/research`) to `docs/research/interviews/<slug>.md`. Read-only by default — destructive actions (form submit, delete, payment) are gated per-step via `AskUserQuestion`. `/browse --setup <login-url>` is the one-shot credential flow: drives a headed login, persists Playwright's `storageState` to `<repo>/.claude/browse/storage-state.json` (skill auto-`.gitignore`s the path), and every subsequent `/browse` reuses it. Bails cleanly on missing MCP, missing required capability (navigate / click / type / screenshot), unreachable localhost, non-git project, or expired storage state. Slug validation and frontmatter quoting lifted from `/research`. **Naming caveat:** collides with gstack's `browse` skill — install workshop with `--project` scope or rename locally if both are present on `~/.claude/commands/`.
+
 ## [0.4.0] — 2026-05-01
 
 ### Added
