@@ -62,7 +62,7 @@ When the underlying skills change shape, this orchestrator re-reads the new bodi
 - If `auto-do/<slug>` already exists locally OR on the remote (`git ls-remote --heads origin auto-do/<slug>`), suffix `-2`, `-3`, …, capped at `-99` (bail if all are taken).
 - **Branch selection:**
   - If current branch equals `<default>`: `git checkout -b auto-do/<slug>`.
-  - Otherwise: check divergence with `git rev-list --count <default>..HEAD`. **If the count is 0** (current branch is at `<default>` or behind), reuse it. **If > 0** (current branch has unrelated commits ahead of `<default>`), do not reuse — `git checkout -b auto-do/<slug>` from `<default>` and proceed. Reusing a branch with unrelated commits would push them in the PR.
+  - Otherwise: check divergence with `git rev-list --count <default>..HEAD`. **If the count is 0** (current branch is at `<default>` or behind), reuse it. **If > 0** (current branch has unrelated commits ahead of `<default>`), do not reuse — run `git checkout -b auto-do/<slug> <default>` (with the explicit `<default>` start-point) and proceed. Reusing a branch with unrelated commits would push them in the PR; omitting the start-point would branch from the dirty feature history we're trying to escape.
 - Log: `default-branch: <default>`, `gh-pr-ready-mode: <flag | api-fallback>`, `branch: <branch>` to the auto-decision log.
 
 ### 2. Plan
@@ -179,11 +179,11 @@ Read the resolved `review-pr.md` skill file (per the **How `/auto-do` orchestrat
 - Round 2 (Codex re-review) runs.
 - **Round-2 outcomes:**
   - **Clean:** print "Round 2 clean.", proceed to the report.
-  - **New must-fix items:** the underlying `/review-pr` posts the round-2 findings as a PR comment then dispatches its round-2 `AskUserQuestion` ("Address now / Dump to TODOS.md / Abort"). Auto-pick **"Dump to TODOS.md and stop"** for the underlying skill, then `/auto-do` adds the safe-stop layering on top:
+  - **New must-fix items:** the underlying `/review-pr` posts the round-2 findings as a PR comment then dispatches its round-2 `AskUserQuestion` ("Address now / Dump to TODOS.md / Abort"). Auto-pick **"Abort"** — `/auto-do` owns the post-stop cleanup and we don't want the underlying skill to write its own TODOS.md entry (duplicate) or take any other action. After the underlying skill exits, `/auto-do` runs the safe-stop:
     1. Append the round-2 findings to `TODOS.md` under `## Review findings — <YYYY-MM-DD>` per the existing convention. **Stage and commit this**: `git add TODOS.md && git commit -m "auto-do(<slug>): round-2 findings deferred to TODOS.md"`. Then `git push origin HEAD:refs/heads/<branch>` so the PR has the promised TODOs and the working tree stays clean.
     2. Convert the PR to draft so it cannot be merged accidentally:
        - If `gh-pr-ready-mode: flag` (set in step 1, `gh` ≥ 2.40): `gh pr ready --undo <n>`.
-       - If `gh-pr-ready-mode: api-fallback`: `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f draft=true`.
+       - If `gh-pr-ready-mode: api-fallback`: GitHub's REST `PATCH /pulls/<n>` does **not** support a `draft` field — converting to draft requires the GraphQL `convertPullRequestToDraft` mutation. Fetch the PR's node ID first (`gh pr view <n> --json id -q .id`), then: `gh api graphql -f query='mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{isDraft}}}' -f id="<node-id>"`.
     3. Post a blocking comment: `gh pr comment <n> --body "auto-do: round 2 surfaced N new must-fix items. PR converted to draft. Items committed to TODOS.md (commit <sha>). Human attention needed."`
     4. Edit the PR body to append a `## Final status: failed:round-2-must-fix` section (use `gh pr edit <n> --body-file <path>` against the body file from step 10).
     5. Stop. No round 3.
