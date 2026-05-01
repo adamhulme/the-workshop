@@ -5,7 +5,7 @@ argument-hint: [--setup] [url] [scenario]
 
 Orchestrate an existing browser MCP (Playwright MCP recommended; Chrome DevTools MCP an alternative) to drive a *visible* browser. Sessions land at `docs/research/interviews/<slug>.md` with screenshots alongside.
 
-`/browse --setup` is the one-shot credential flow: log in once via the headed browser, the storage state is saved, every subsequent `/browse` reuses it. No credentials are stored in env vars, the repo, or this skill.
+`/browse --setup` is the one-shot credential flow: log in once via the headed browser, the resulting Playwright `storageState` is persisted, every subsequent `/browse` reuses it. Claude never types or sees the user's password — the user logs in manually in the browser. The persisted storage state (cookies + localStorage = session credentials) lives at `<repo>/.claude/browse/storage-state.json`, which the skill auto-`.gitignore`s, so it stays on the user's machine and never lands in version control.
 
 User arguments: $ARGUMENTS
 
@@ -21,7 +21,7 @@ User arguments: $ARGUMENTS
 - **Headed mode only.** This skill is for the user to *watch*. If the active MCP cannot show a window (WSL with no DISPLAY, headless container, remote SSH without X-forwarding), bail with: "/browse needs a headed browser the user can see. Configure Playwright MCP with `--headed`, or run from a desktop session."
 - **Read-only by default.** Navigation, clicks on visibly-safe elements (links, tabs, accordions), typing into search boxes — all fine without confirmation. Form submissions, deletes, payments, anything POST-shaped, anything that mutates remote state — pause and confirm via `AskUserQuestion` per action.
 - **Never log in for the user.** Setup mode opens the page; the user types the credentials. Claude does not see, request, or store passwords.
-- **Stop on user say-so.** "stop", "done", "save", or `Ctrl+C` ends the session. Partial sessions still write a note marked `status: partial`.
+- **Stop on user say-so.** Reply with "stop", "done", or "save" inline to end the session — partial sessions still write a note marked `status: partial`. A hard cancel (`Ctrl+C`) kills the command before the write can happen, so no note lands; that's a fundamental limitation of slash-command execution and is documented in the degradations.
 - **Never run dev servers.** If localhost is unreachable, bail — don't start `npm run dev` or equivalent.
 
 ## Steps
@@ -81,6 +81,7 @@ Print this verbatim, then stop:
     - "Walk a named user flow (paste via Other)"
     - "Just observe — no specific scenario"
 - For "verify a recent change": run `git diff --name-only origin/HEAD..HEAD` (or fall back to `git diff HEAD~1..HEAD --name-only`) and surface the modified files, then ask which one's UI to focus on.
+- **Derive a tentative slug now**, before screenshots are captured in step 5, so `<slug>-screenshots/` is a known path before you need it. Source: the scenario (preferred) or the URL path. Run the validation + normalisation rules from step 7's slug section (path-traversal reject, illegal-char reject, kebab-normalise, max 80, empty-slug fallback to `browse-<YYYYMMDD-HHMM>`). The user can revise it at step 7 — if they do, rename the screenshots directory before writing the note.
 
 ### 4. Load saved storage state (auth)
 
@@ -135,6 +136,8 @@ After the session ends:
   - **Reject** if it contains path separators (`/`, `\`), `..` segments, or starts with `/`, `~`, or a Windows drive letter (`C:`). These would write outside `docs/research/`.
   - **Reject** characters illegal on common filesystems: newlines, NUL, `:`, `*`, `?`, `"`, `<`, `>`, `|`, plus Windows reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM[1-9]`, `LPT[1-9]`).
   - Normalise to kebab-case: lowercase ASCII alphanumerics + hyphens. Replace runs of whitespace/underscores/punctuation with `-`, collapse repeated hyphens, trim leading/trailing hyphens. Truncate to 80 characters.
+  - **Empty-slug fallback.** If normalisation produces an empty string (punctuation-only inputs, root URLs, etc.), substitute `browse-<YYYYMMDD-HHMM>` so the resulting filename and screenshots directory are non-degenerate.
+  - If the user revised the slug at step 3 vs the slug used for screenshots, rename `docs/research/interviews/<old-slug>-screenshots/` to `docs/research/interviews/<new-slug>-screenshots/` before writing the note.
   - If normalisation altered the input, dispatch `AskUserQuestion`:
     - Question: "Use slug `<normalised>`?"
     - Header: "Slug"
@@ -195,10 +198,11 @@ Triggered when `$ARGUMENTS` contains `--setup`. Behaviour:
        - "Skip — I'll handle it manually"
 4. Confirm the user's Claude config has Playwright MCP started with `--storage-state=.claude/browse/storage-state.json`. If not (heuristic: tell the user we can't introspect their config but the path needs to match), print the snippet from step 1's **No MCP** block, ask the user to update their config, then exit with: "Update `~/.claude.json`, restart Claude Code, then re-run `/browse --setup <url>`."
 5. With config confirmed, drive the headed browser to the login URL via the MCP. Print: "Browser opened. Log in manually. When fully logged in (you can see your authenticated app state), reply with `saved` here."
-6. Wait for the user's `saved` reply. Once received:
-   - Use the MCP's storage-state-export tool if available (Playwright MCP exposes one in some versions). Otherwise, instruct the user to close the browser via the MCP — Playwright writes the storage state on context close per the `--storage-state` startup flag.
-   - Verify `<repo>/.claude/browse/storage-state.json` exists and is non-empty. If not, surface an error with the likely cause (MCP doesn't honour the flag, or browser was force-killed before close).
-7. Report: "Storage state saved to `.claude/browse/storage-state.json`. Future `/browse` runs will reuse it. Re-run `/browse --setup` if the session expires."
+6. Wait for the user's `saved` reply. Once received, persist the storage state. Playwright's `--storage-state` CLI flag is a *load* path; the *save* mechanism is separate, and the way it's exposed depends on the MCP build:
+   - **If the MCP exposes a save tool** (Playwright MCP recent builds expose something equivalent to `mcp__playwright__browser_save_storage_state` or `browser_close` with a `storageStatePath` argument): call it, passing `<repo>/.claude/browse/storage-state.json` as the destination.
+   - **If no save tool is exposed**, bail with: "Your Playwright MCP build does not expose a storage-state save tool. Upgrade to the latest `@playwright/mcp` (`npx @playwright/mcp@latest`) and re-run `/browse --setup`. As a manual workaround, run a one-off `npx playwright codegen --save-storage=.claude/browse/storage-state.json <url>`, log in there, and exit — Playwright will write the file on close."
+   - After save, verify `<repo>/.claude/browse/storage-state.json` exists and is non-empty (`{"cookies":[…]}` shape, not the empty `{}`). If empty: the user may not have completed login before triggering save; surface the file size and ask whether to retry.
+7. Report: "Storage state saved to `.claude/browse/storage-state.json` (<size> bytes). Future `/browse` runs will reuse it. Re-run `/browse --setup` if the session expires."
 
 ## Degradations
 
