@@ -1,7 +1,8 @@
 ---
-status: in-progress
+status: outcome
 date: 2026-05-01
 started: 2026-05-01
+shipped: 2026-05-01
 slug: browse
 ---
 
@@ -53,4 +54,31 @@ Skill body inherits from `commands/research.md` for slug hardening and frontmatt
 - Pinning a specific Playwright MCP version range — the skill notes "tested with current latest" until the MCP's release cadence is clearer.
 - A smoke-test fixture for `/browse --setup` against a public no-auth page (e.g. httpbin) — manual verification per the plan's checklist for now.
 
-**Next:** push, `gh pr create`, run `/review-pr` autonomously per `auto mode` — and stop before merge.
+## Outcome
+
+**PR:** [#16](https://github.com/adamhulme/the-workshop/pull/16) — merged in `5e4bed9` on 2026-05-01.
+
+**What shipped:**
+
+- `commands/browse.md` — 233 lines. Headed-browser skill orchestrating Playwright MCP (primary) or Chrome DevTools MCP (alternative). `--setup` flow drives a one-shot login and persists Playwright `storageState` to `<repo>/.claude/browse/storage-state.json`; subsequent `/browse` runs reuse it. Read-only by default; destructive actions gated per-step. Bails cleanly on missing MCP, missing required capability (navigate / click / type / screenshot), unreachable localhost, non-git project, or expired storage state.
+- `docs/plans/headed-browser.md` — original approved plan plus the full eng-review block. Codex outside voice surfaced 25 findings; 14 folded into the skill spec, 3 deferred to TODOs.
+- `README.md`, `CHANGELOG.md` — skills table, where-to-go-next, optional integrations, [Unreleased] entry.
+- `TODOS.md` — 6 should-fix + 7 follow-up review items captured for later passes.
+- **Bonus (bundled per user direction):** `commands/review-pr.md` — every review round now posts its consolidated findings as a top-level PR comment. Round 2 also posts a "Round 2 clean" comment on the all-clear path. Comment posting is observability-only; failures log and continue.
+
+**Plan-vs-reality drift:**
+
+- Two rounds of `/review-pr` ran on the PR itself. Round 1 (Codex + pr-reviewer in parallel) surfaced 4 must-fix items — screenshot path inconsistency, ill-formed `AskUserQuestion` gates, unverifiable storage-state-loaded claim, hand-wavy localhost timeout. All addressed inline in commit `757e947`. Round 2 (Codex re-review on the fix-up diff) surfaced 5 new findings — mis-ordered slug derivation, conflated `--storage-state` load-vs-save, credentials-claim wording, `Ctrl+C` contradiction, missing empty-slug fallback. All addressed inline in commit `5135bbf`. Hard cap held — no round 3.
+- The `/review-pr` PR-comment update was bundled into the same PR mid-flight rather than landing on a separate branch. Project CLAUDE.md says "stay in scope," but the user explicitly overrode for this case ("Just bundle it in with this"). One bundled commit (`878e25b`) lands the change cleanly.
+- An inline Codex GitHub-bot comment about the same hardcoded date that round 1 fixed was replied-to with the commit reference rather than going stale.
+
+**What to watch:**
+
+- **`/browse` collides with gstack's `browse` skill** for users who have both. Worth tracking whether real users hit this in practice. README documents the workaround (`--project` scope or local rename).
+- **Playwright MCP storage-state save mechanism** is the brittle bit — the skill assumes the MCP exposes a save tool. If users hit "MCP build does not expose a storage-state save tool", we'll need to point them at the manual `playwright codegen --save-storage` workaround the skill already documents.
+- **`interviews/` taxonomy** — the original plan put `/browse` notes under `docs/research/interviews/` to match existing folder convention, but a UI walkthrough isn't really an interview. Logged to TODOs as a follow-up — revisit after a few real sessions to see if it pollutes customer-interview lookups.
+
+**Follow-ups in TODOS.md:**
+
+- 6 should-fix items from round 1 (self-signed cert speculation, auth-gated heuristic conflicts, --setup close-context gap, capability-check tool names, step S/4 awkward wording).
+- 7 longer-term items (recent-change git-diff base, plan summary drift, solution doc copy alignment, README wording, smoke-test fixture, taxonomy concern, slug-screenshots notation).
