@@ -54,8 +54,6 @@ Skill body inherits from `commands/research.md` for slug hardening and frontmatt
 - Pinning a specific Playwright MCP version range — the skill notes "tested with current latest" until the MCP's release cadence is clearer.
 - A smoke-test fixture for `/browse --setup` against a public no-auth page (e.g. httpbin) — manual verification per the plan's checklist for now.
 
-**Next:** push, `gh pr create`, run `/review-pr` autonomously per `auto mode` — and stop before merge.
-
 ## Outcome
 
 **PR:** [#16](https://github.com/adamhulme/the-workshop/pull/16) — merged in `5e4bed9` on 2026-05-01.

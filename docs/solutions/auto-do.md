@@ -25,7 +25,7 @@ Trigger from the user: "Add a /auto-do mode which runs through the sequence of n
 
 **Option 1.** Add `commands/auto-do.md` as a thin orchestrator. The skill body specifies:
 
-- The auto-decision policy (recommended option taken; safer side on cross-model tension; TODO triage defaults to A; round-1 review gate auto-takes "Address must-fix now"; round-2 with new must-fix auto-takes "Dump to TODOS.md and stop").
+- The auto-decision policy (recommended option taken; safer side on cross-model tension; TODO triage defaults to A for should-fix and follow-up, while must-fix items are fixed inline; round-1 review gate auto-takes "Address must-fix now"; round-2 with new must-fix takes the underlying skill's "Dump to TODOS.md and stop" and *layers* the safe-stop on top — commit the TODOS.md edit, push, convert the PR to draft via `gh pr ready --undo` or the API fallback, post a blocking PR comment, and append a `Final status: failed:round-2-must-fix` section to the PR body).
 - A pre-flight that bails on dirty tree, missing `gh`, or being on the default branch (in which case it creates `auto-do/<slug>` and switches before touching files).
 - A design-scope detector (keyword + file-path heuristic) that conditionally runs `/plan-design-review`.
 - A test-failure stop — never commits broken tests.

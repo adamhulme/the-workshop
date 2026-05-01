@@ -17,7 +17,7 @@ User arguments: $ARGUMENTS
 
 This is a markdown skill, not a runtime. Slash commands are prompt expansions, not callable subroutines. So at each step, `/auto-do`:
 
-1. Reads the underlying skill file from disk (`commands/<skill>.md`).
+1. **Reads the underlying skill file from its install location.** Skills install to `~/.claude/commands/<skill>.md` (user scope) or `<repo>/.claude/commands/<skill>.md` (project scope) — not from the user's current working directory. Resolve the path by checking project scope first (`.claude/commands/<skill>.md`), then user scope (`$HOME/.claude/commands/<skill>.md`). If neither resolves, bail with: "/auto-do can't find `commands/<skill>.md` in `.claude/commands/` or `~/.claude/commands/`. Reinstall the workshop or check your `--user` vs `--project` scope."
 2. Executes its numbered steps inline, applying the auto-decision policy below at every prompt.
 3. Logs each auto-decision to the Auto-decision log.
 
@@ -53,14 +53,17 @@ When the underlying skills change shape, this orchestrator re-reads the new bodi
 - `git rev-parse --show-toplevel` — must be in a repo. Bail if not.
 - `git status --porcelain` — must be empty. Bail with: "auto-do refuses to start with a dirty working tree. Commit, stash, or revert first."
 - `gh auth status` — must pass. Bail with: "auto-do needs `gh` authenticated; run `gh auth login` and retry."
-- Detect default branch: `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` (fallback `main`).
+- **Detect and capture the default branch**: `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` (fallback `main`). Store as `<default>` for use in later steps (9 complexity re-check, 11 UI re-detection). Don't hardcode `main` anywhere downstream.
+- **Verify `gh` version supports `gh pr ready --undo`** (used in step 12's round-2 safe-stop): `gh --version` must report ≥ 2.40.0. If older, the round-2 safe-stop falls back to `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f draft=true`. Log the chosen mode.
 - Derive `<slug>` from `$ARGUMENTS`:
   - Lift the validation rules from `commands/research.md`'s slug section: reject path separators / `..` / drive letters; reject filesystem-illegal characters and Windows reserved names; normalise to kebab-case (lowercase ASCII alphanumerics + hyphens, repeated hyphens collapsed, leading/trailing hyphens trimmed).
   - Cap at **60 chars** (headroom under git's remote-ref limit).
-  - If the result is empty, fall back to `auto-do-<YYYYMMDD-HHMM>`.
-- If `auto-do/<slug>` already exists locally OR on the remote (`git ls-remote --heads origin auto-do/<slug>`), suffix `-2`, `-3`, … until unique.
-- If current branch equals the default branch, `git checkout -b auto-do/<slug>`. Otherwise reuse the current branch and treat it as the auto-do target.
-- Log: `branch: <branch>` to the auto-decision log.
+  - If the result is empty, fall back to `auto-do-<UTC YYYYMMDD-HHMM>`.
+- If `auto-do/<slug>` already exists locally OR on the remote (`git ls-remote --heads origin auto-do/<slug>`), suffix `-2`, `-3`, …, capped at `-99` (bail if all are taken).
+- **Branch selection:**
+  - If current branch equals `<default>`: `git checkout -b auto-do/<slug>`.
+  - Otherwise: check divergence with `git rev-list --count <default>..HEAD`. **If the count is 0** (current branch is at `<default>` or behind), reuse it. **If > 0** (current branch has unrelated commits ahead of `<default>`), do not reuse — `git checkout -b auto-do/<slug>` from `<default>` and proceed. Reusing a branch with unrelated commits would push them in the PR.
+- Log: `default-branch: <default>`, `gh-pr-ready-mode: <flag | api-fallback>`, `branch: <branch>` to the auto-decision log.
 
 ### 2. Plan
 
@@ -118,10 +121,12 @@ Edit files per the (now-reviewed) plan:
 
 ### 8. Solution doc — in-progress
 
-Advance `docs/solutions/<slug>.md` to `in-progress`:
+If step 6 wrote `docs/solutions/<slug>.md`, advance it to `in-progress`:
 
 - Append `## In progress` with branch name, commit range, and one paragraph on what was actually built.
 - Update frontmatter: `status: in-progress`, add `started: <today>`.
+
+If step 6 skipped (because `docs/solutions/` was missing), this step is also skipped — don't try to edit a file that doesn't exist. Log: `solution-doc-in-progress: skipped — step 6 also skipped`.
 
 ### 9. Pre-push verification
 
@@ -130,54 +135,58 @@ Before pushing, run **two** checks in this order:
 1. **Test gate.** Detect and run the project's test command (`npm test`, `pnpm test`, `pytest`, `cargo test`, project Makefile target). Detection rules:
    - Prefer the command surfaced by the project's own `CLAUDE.md` if it documents one.
    - Otherwise, look for a top-level `package.json` with a `test` script, then `pyproject.toml`, then `Cargo.toml`, then `Makefile`.
-   - For monorepos, run only the workspace-scoped test command if the diff is contained to one workspace; run the root command otherwise.
    - **Skip watchers.** If a test command would run in watch mode by default, append the equivalent of `--run` / `--ci` / `CI=1` to force a single-pass run. If unsure, log `tests: skipped — could not detect a non-watch invocation` and continue (do not block on detection failure alone).
-2. **Diff complexity re-check.** Recount the diff's affected files (`git diff main..HEAD --name-only | wc -l`). If the implemented diff exceeds 8 files (the complexity smell threshold), do not block — but log to the auto-decision log: `diff-complexity: <N> files (>8 — flag for human review)`. The human reviewer is the gate.
+   - Log: `test-command: <detected | none>` plus the actual command run.
+2. **Diff complexity re-check.** Recount the diff's affected files (`git diff <default>..HEAD --name-only | wc -l`, where `<default>` is the captured default branch from step 1). If the implemented diff exceeds 8 files (the complexity smell threshold), do not block — but log to the auto-decision log: `diff-complexity: <N> files (>8 — flag for human review)`. The human reviewer is the gate.
 
 If the test gate fails, stop. Surface the failing output. Commits stay locally; nothing is pushed.
 
 ### 10. Push and create PR
 
-- `git push origin HEAD:refs/heads/<branch>` (the branch from step 1). Set upstream on first push.
-- `gh pr create --title "<one-line task summary>" --body "<auto-generated body>"`. Body must include:
+- `git push --set-upstream origin <branch>` — set upstream explicitly so `/review-pr`'s round-1 fix-up push in step 12 doesn't trip its "Branch has no remote yet" `AskUserQuestion` gate.
+- Write the PR body to a temp file (`gh pr create --body-file <path>`) — inline `--body` is brittle for large multiline content with backticks, code fences, and quotes, and `--body-file` makes the body editable from disk for later updates by step 11. Body must include:
   - Heading `## auto-do output — review before merge`.
   - Links to `docs/plans/<slug>.md` and `docs/solutions/<slug>.md` (if written).
   - The full **Auto-decision log** (see structure below).
   - The eng review's `## Engineering Review` block (from `docs/plans/<slug>.md`).
   - The design review's `## Design Review` block, if step 4 ran.
-  - A placeholder `## /browse verification` section that step 11 fills in (or step 11 marks "skipped" with a reason). The placeholder is added now so the PR body has a stable structure.
+  - A placeholder `## /browse verification` section that step 11 fills in (or step 11 marks "skipped" with a reason). The placeholder is added now so the PR body has a stable structure; step 11 updates the file and runs `gh pr edit <n> --body-file <path>` to apply it.
 - Capture the PR URL.
 
 ### 11. UI verification via /browse (conditional)
 
-Re-detect UI scope from the **actual** diff (`git diff main..HEAD --name-only`) — initial detection from step 3 may have been wrong. If the implemented diff has UI files, run the verification pass even if step 3 missed it; if the diff has no UI files despite step 3 detecting UI scope, skip and log the discrepancy.
+Re-detect UI scope from the **actual** diff (`git diff <default>..HEAD --name-only`, where `<default>` is captured from step 1) — initial detection from step 3 may have been wrong. If the implemented diff has UI files, run the verification pass even if step 3 missed it; if the diff has no UI files despite step 3 detecting UI scope, skip and log the discrepancy.
 
 When the verification pass runs:
 
 - Check `<repo>/.claude/browse/storage-state.json`. If the target URL is auth-gated AND no storage state exists, **skip**: log `browse: skipped — no storage state for <url>; run /browse --setup once to enable next-time UI verification` to the auto-decision log and to the PR body's `## /browse verification` section. `/auto-do` does NOT run `/browse --setup` — setup is interactive by nature.
-- If storage state exists OR the target is unauthenticated (localhost dev server, public URL), read `commands/browse.md` and execute it inline with these auto-decisions:
+- **"Auth-gated" is not "non-localhost".** Local apps fronted by an auth proxy or that mirror prod auth need storage state too. The check: if the target URL responds with a redirect to a login path, OR if `<repo>/.claude/browse/storage-state.json` exists (signalling the user previously decided this app needed auth), treat as auth-gated regardless of host. Pure localhost dev servers without observed auth proceed without storage state.
+- If storage state exists OR the target is genuinely unauthenticated, read `commands/browse.md` from the resolved install location (per the **How `/auto-do` orchestrates** section) and execute it inline with these auto-decisions:
   - Target URL: derived from the project's dev URL config (`package.json` `scripts.dev` port, or `CLAUDE.md` if it documents one). If no dev URL is discoverable, skip and log.
   - Scenario: "Verify the change introduced by this PR" — feed the diff filenames as context.
   - Destructive-action gate: ANY destructive action surfaces and stops the verification pass. `/auto-do` does not auto-confirm destructive actions — log `browse: stopped at destructive-action gate on <action>; manual verification needed`.
 - If `/browse` detects a login redirect despite storage state being present, log `browse: storage state expired — verification skipped` and continue. Don't bail.
-- After the browse pass (or skip), update the PR body's `## /browse verification` section with the session note path (or the skip reason).
+- After the browse pass (or skip), update the PR body's `## /browse verification` section (edit the body file written in step 10, then `gh pr edit <n> --body-file <path>`).
 
 ### 12. Review the PR
 
-Read `commands/review-pr.md`. Execute inline with these auto-decisions:
+Read the resolved `review-pr.md` skill file (per the **How `/auto-do` orchestrates** section). Execute inline with these auto-decisions:
 
 - Pass the PR number from step 10.
-- Round 1 (Codex + pr-reviewer in parallel) runs as the underlying skill describes. The new round-comment posting (added in PR #16, commit `878e25b`) puts the consolidated findings on the PR for the audit trail.
-- At the round-1 user gate: auto-pick **"Address must-fix now (auto-push enabled)"**.
+- Round 1 (Codex + pr-reviewer in parallel) runs as the underlying skill describes. `/review-pr`'s round-comment posting puts the consolidated findings on the PR for the audit trail.
+- At the round-1 user gate (`AskUserQuestion` in `/review-pr` step 4): auto-pick **"Address must-fix now (auto-push enabled)"**.
+- During the round-1 fix-up auto-push, `/review-pr`'s step 6 may dispatch its first-push `AskUserQuestion` ("Branch has no remote yet"). Step 10 of `/auto-do` already pushed with `--set-upstream`, so this gate should not fire. If it does (upstream lost between steps 10 and 12 for some reason): auto-pick **"Push and create remote branch"**.
 - Round 2 (Codex re-review) runs.
 - **Round-2 outcomes:**
   - **Clean:** print "Round 2 clean.", proceed to the report.
-  - **New must-fix items:** the underlying `/review-pr` posts the round-2 findings as a PR comment. `/auto-do` then marks the run as **failed**:
-    - `gh pr ready --undo <n>` — convert to draft so it cannot be merged accidentally.
-    - `gh pr comment <n> --body "auto-do: round 2 surfaced N new must-fix items. PR converted to draft. Items dumped to TODOS.md. Human attention needed."`
-    - Append the items to `TODOS.md` under `## Review findings — <YYYY-MM-DD>` per the existing convention.
-    - Append a "Final status: failed" note to the PR body.
-    - Stop. No round 3.
+  - **New must-fix items:** the underlying `/review-pr` posts the round-2 findings as a PR comment then dispatches its round-2 `AskUserQuestion` ("Address now / Dump to TODOS.md / Abort"). Auto-pick **"Dump to TODOS.md and stop"** for the underlying skill, then `/auto-do` adds the safe-stop layering on top:
+    1. Append the round-2 findings to `TODOS.md` under `## Review findings — <YYYY-MM-DD>` per the existing convention. **Stage and commit this**: `git add TODOS.md && git commit -m "auto-do(<slug>): round-2 findings deferred to TODOS.md"`. Then `git push origin HEAD:refs/heads/<branch>` so the PR has the promised TODOs and the working tree stays clean.
+    2. Convert the PR to draft so it cannot be merged accidentally:
+       - If `gh-pr-ready-mode: flag` (set in step 1, `gh` ≥ 2.40): `gh pr ready --undo <n>`.
+       - If `gh-pr-ready-mode: api-fallback`: `gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f draft=true`.
+    3. Post a blocking comment: `gh pr comment <n> --body "auto-do: round 2 surfaced N new must-fix items. PR converted to draft. Items committed to TODOS.md (commit <sha>). Human attention needed."`
+    4. Edit the PR body to append a `## Final status: failed:round-2-must-fix` section (use `gh pr edit <n> --body-file <path>` against the body file from step 10).
+    5. Stop. No round 3.
 
 ### 13. Final report
 
@@ -207,23 +216,37 @@ Next:           Human reviews PR. /auto-do does not merge.
 
 A `## Auto-decisions` section in the PR body lists every auto-pick `/auto-do` made. Each line: `<step>: <decision> — <one-line rationale>`.
 
-Required entries:
+The links logged as `research-back-links` count entries that landed in the plan file's `## See also` section. They are **not** copied into the PR body itself — only the count is reported here, and the audit chain points to the plan file.
 
+A "non-stopword token" (used in step 2's research-link heuristic) is a token of length ≥ 3 that is not in: `the, and, for, with, this, that, into, from, onto, your, our, my, a, an, of, to, in, on, by, is, it, be`.
+
+Required entries (in order):
+
+- `default-branch: <name>` (from step 1).
+- `gh-auth: passed` (from step 1).
+- `gh-pr-ready-mode: <flag | api-fallback>` (from step 1).
 - `branch: <name>` (from step 1).
 - `plan: <path | in-conversation only>` (from step 2).
-- `research-back-links: <N | none>` (from step 2).
+- `research-back-links: <N | none>` (from step 2 — count of links in the plan's See-also section).
 - `ui-scope-initial: <detected | none>` (from step 3).
 - For each design-review dimension below 8: `design:<dimension>: <patched-in-plan | deferred>`.
 - `design-review-outside-voice: skipped — auto-mode`.
 - For each eng-review issue: `eng-review:<section>:<issue>: <recommended | safer-side: <rationale>>`.
 - For each TODO triage decision: `eng-review:todo:<item>: <A | C-test-gap | C-regression>`.
-- `solution-doc: <written | skipped — <reason>>`.
-- `tests: <passed | failed | skipped — <reason>>`.
-- `diff-complexity: <N files>`.
-- `ui-scope-final: <detected-from-diff | none>`.
-- `browse: <ran:<note-path> | skipped:<reason>>`.
-- `review-r1-gate: address-must-fix-now`.
-- `review-r2: <clean | failed: N must-fix>`.
+- `solution-doc-decided: <written | skipped — <reason>>` (from step 6).
+- `solution-doc-in-progress: <written | skipped — step 6 also skipped>` (from step 8).
+- `test-command: <command run | none — could not detect>` (from step 9).
+- `tests: <passed | failed | skipped — <reason>>` (from step 9).
+- `diff-complexity: <N files>` (from step 9).
+- `pr-url: <url>` (from step 10).
+- `pr-status: <ready | draft>` (from step 10/12 — initially `ready`, becomes `draft` if step 12 round-2 safe-stop fires).
+- `ui-scope-final: <detected-from-diff | none>` (from step 11).
+- `storage-state-path: <path | none>` (from step 11).
+- `browse: <ran:<note-path> | skipped:<reason>>` (from step 11).
+- `review-r1-gate: address-must-fix-now` (from step 12).
+- `review-r1-first-push: <not-fired | push-and-create>` (from step 12).
+- `review-r2: <clean | failed: N must-fix>` (from step 12).
+- `final-status: <success | failed:round-2-must-fix | failed:test-gate | failed:complexity-smell | failed:ambiguity>` (from step 13; `failed:complexity-smell` exits at step 5 before any PR is created — log to console + the run's solution doc rather than a PR body).
 
 ## Degradations
 

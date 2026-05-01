@@ -22,3 +22,15 @@ PR #16 (`feat/browse`). Round 1 review by Codex CLI + `pr-reviewer` agent in par
 - **commands/browse.md:205** — No smoke-test fixture or scripted validation exists for skill markdown invariants (date placeholders, paths, storage-state wording). Manual verification per the plan's checklist for now; a fixture would catch path drift like the one fixed in round 1.
 - **docs/solutions/browse.md** — Once PR #16 merges, advance the solution doc to `outcome` per the workshop convention. Run `/changelog` afterwards.
 - **README.md:199** — `<slug>(-screenshots)/` notation is novel and the parenthetical is ambiguous. Consider rephrasing to "the note plus a sibling screenshots dir" or similar.
+
+## Review findings — 2026-05-01 (PR #18, /auto-do)
+
+PR #18 (`feat/auto-do`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. Must-fix and should-fix items addressed inline in commit `<round-1-fixup>`; follow-up items captured here.
+
+### Follow-up
+
+- **commands/auto-do.md** (branch suffix loop) — Step 1's `auto-do/<slug>-2`, `-3`, … suffix logic is now bounded at `-99`. Past that the skill bails. If real usage ever hits this cap, revisit.
+- **commands/auto-do.md** (slug fallback timezone) — Empty-slug fallback uses `auto-do-<UTC YYYYMMDD-HHMM>`. The "UTC" qualifier is documented in the skill body; if real usage shows the collision-suffix path is enough on its own, the explicit timezone could be dropped.
+- **commands/auto-do.md** (PR #16 SHA-pinning) — Removed the `878e25b` SHA reference; "added in PR #16" is sufficient provenance and SHAs go stale.
+- **docs/plans/auto-do.md** — Verification list is entirely manual. A smoke fixture (e.g. running `/auto-do "tiny task"` against a public template repo with a known small change) would catch command-path drift and PR-body shape regressions.
+
