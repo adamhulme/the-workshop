@@ -22,10 +22,13 @@ The single user gate at step 4 uses **`AskUserQuestion`**, not a trailing prose 
 
 ## Steps
 
-### 1. Locate the diff
+### 1. Locate the diff and confirm we're on the right branch
 
-- If `$ARGUMENTS` is a PR number: run `gh pr diff <n>` and `gh pr view <n> --json baseRefName,headRefName,number,title`. Capture the head branch name; that's where auto-push goes.
-- Else: detect default branch with `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` (fallback `main`), then `git diff <default>...HEAD`. Capture current branch via `git symbolic-ref --short HEAD`.
+- If `$ARGUMENTS` is a PR number:
+  - Run `gh pr diff <n>` and `gh pr view <n> --json baseRefName,headRefName,number,title`.
+  - **Verify current branch matches the PR head.** Compare `git symbolic-ref --short HEAD` against `headRefName`. If they differ, abort with: ``"This PR's head is `<headRefName>`, but you're on `<current>`. Run `gh pr checkout <n>` and re-run /review-pr."`` Don't auto-checkout — uncommitted changes or upstream divergence make that unsafe.
+  - Capture `headRefName` as the auto-push target. After the verification above it equals the current branch, so step 6's `git push` writes to the right place.
+- Else (no PR number): detect the default branch with `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` (fallback `main`), then `git diff <default>...HEAD`. Capture current branch via `git symbolic-ref --short HEAD` as the auto-push target.
 - Bail with a clear message if there is no diff: "No diff to review."
 - Cap diff size: if larger than ~30k tokens, truncate with a one-line warning ("review will focus on the first 30k tokens; re-run on a narrower base").
 
@@ -79,15 +82,14 @@ Append `should-fix` and `follow-up` items verbatim into `TODOS.md` under a dated
 
 After the round 1 fix-up commit lands locally, push it automatically — no extra confirmation when conditions are safe:
 
-1. **Determine target.** If a PR was specified in step 1, use that PR's head branch (already captured). Otherwise use `git symbolic-ref --short HEAD`.
+1. **Target = current branch.** Step 1 already captured the auto-push target as the current branch (verified to equal the PR head when a PR was specified). Re-confirm with `git symbolic-ref --short HEAD` before pushing in case something changed mid-run.
 2. **Refuse to push to main/master/default branch.** If the current branch *is* the default branch, skip the push and print: "On default branch — skipping auto-push. Push manually if you intended to land directly." This guard is non-negotiable.
-3. **Check upstream.** Run `git rev-parse --abbrev-ref --symbolic-full-name @{u}` to see if the branch has an upstream.
-   - If yes: `git push` (no force, no flags). Capture the output.
-   - If no: dispatch `AskUserQuestion`:
-     - Question: "Branch `<branch>` has no upstream. Push and set upstream to `origin/<branch>`?"
-     - Header: "Set upstream"
-     - Options: "Push and set upstream" / "Skip push"
-     - On "Push and set upstream": `git push -u origin <branch>`.
+3. **Push.** Use an explicit refspec so the push always targets the captured branch by name, even if local upstream config is wonky: `git push origin HEAD:refs/heads/<target>`. This avoids any ambiguity about where `git push` (with no args) would send the commit.
+   - If the push fails with `fetch first` / non-fast-forward, treat it as the failure case in step 5 below — do not force.
+   - If the remote branch doesn't exist yet, the same explicit refspec creates it. Then run `git branch --set-upstream-to=origin/<target>` so future runs are quieter, and dispatch `AskUserQuestion` once to confirm before the very first push of a brand-new branch:
+     - Question: "Branch `<target>` has no remote yet. Push and create `origin/<target>`?"
+     - Header: "First push"
+     - Options: "Push and create remote branch" / "Skip push"
 4. **On push failure** (non-fast-forward, auth error, hook failure): do **not** retry, do **not** force. Surface the exact `git push` stderr to the user and stop. The user resolves and re-runs.
 
 Never use `--force`, `--force-with-lease`, or `--no-verify`.
