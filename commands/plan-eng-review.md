@@ -145,19 +145,49 @@ After all sections complete, offer one independent second opinion. Ask:
 
 > All review sections are complete. Want an independent Codex second opinion? Codex will challenge the plan for logical gaps, feasibility risks, and blind spots. Takes about 2 minutes. (Requires `codex` on PATH.)
 
-If yes, dispatch Codex via `Bash`: `codex exec --skip-git-repo-check "<prompt>"` with the prompt below. Codex's separate context makes it the right tool for the cross-model second opinion. If `codex` is not on PATH, fall back to an `Agent` call with `subagent_type: general-purpose`.
+If yes, dispatch Codex via `Bash` — **pipe the prompt via stdin** and use the gstack dispatch pattern. Don't pass the prompt as a positional arg; long prompts hang in some shells and trip arg-length limits.
 
-```
+```bash
+TMPF=$(mktemp)
+TMPERR=$(mktemp)
+{
+  cat <<'PROMPT_HEAD'
 You are a brutally honest technical reviewer examining a development plan that has
 already been through a multi-section review. Your job is NOT to repeat that review.
 Find what it missed: logical gaps, unstated assumptions, overcomplexity (is there a
 fundamentally simpler approach?), feasibility risks, missing dependencies or sequencing
 issues, strategic miscalibration. Be direct. Be terse. No compliments. Just the
-problems.
+problems. Cap output at 800 words.
 
 THE PLAN:
-<plan content>
+
+PROMPT_HEAD
+  cat <plan-path>
+} > "$TMPF"
+
+_REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+codex exec --skip-git-repo-check \
+  -C "$_REPO_ROOT" \
+  -s read-only \
+  -c 'model_reasoning_effort="high"' \
+  --enable web_search_cached \
+  - < "$TMPF" 2>"$TMPERR"
+
+# Surface any stderr (auth errors, timeouts) to the user before cleanup
+[ -s "$TMPERR" ] && cat "$TMPERR" >&2
+rm -f "$TMPF" "$TMPERR"
 ```
+
+Why this pattern (borrowed from gstack):
+- **Stdin piping** (`-` positional + `< "$TMPF"`) avoids shell argument length limits and quote-escaping breakage on long plans.
+- **`-C "$_REPO_ROOT"`** anchors codex to the repo so it can read project files if needed.
+- **`-s read-only`** sandboxes codex so it can't accidentally edit anything.
+- **`model_reasoning_effort="high"`** is the sweet spot: thorough enough for review work, faster than the default `xhigh` which can hang on big prompts.
+- **`--enable web_search_cached`** lets codex pull in current best practices when relevant.
+- **Stderr capture** surfaces auth failures and timeouts cleanly; users see "run `codex login`" instead of a silent hang.
+- **Cap output at 800 words** in the prompt — keeps codex from generating a 4000-word essay you have to skim.
+
+If `codex` is not on PATH, fall back to an `Agent` call with `subagent_type: general-purpose` and the same prompt body.
 
 Present Codex's output verbatim under an `OUTSIDE VOICE (Codex):` header. Surface any disagreements with earlier review findings as `CROSS-MODEL TENSION:` blocks — present both sides neutrally and ask the user to decide. Do not auto-incorporate outside voice findings; the user approves each one.
 
