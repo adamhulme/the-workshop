@@ -26,7 +26,7 @@ The brainstorm (`docs/brainstorms/auto-fleet.md`) surfaced the core scoping deci
 1. **Pre-flight.** Inherit `/auto-do`'s pre-flight checks (git repo, dirty tree, `gh` auth, default branch capture, `gh pr ready --undo` mode detection). Plus fleet-specific, in this order:
    - Derive `<slug>` from `$ARGUMENTS` first (kebab-case validation, ≤ 50 chars). All later steps refer to `<slug>` by the derived value, never `$ARGUMENTS` raw.
    - Refuse to run on the default branch; require current branch == `fleet/<slug>`.
-   - Verify the fleet branch is rooted on `<default>`: `git rev-list --count <default>..HEAD` must be 0. (Mirrors `/auto-do`'s divergence guard. Bail otherwise; the user re-creates the branch from `<default>` and re-invokes.)
+   - Verify the fleet branch is rooted on `<default>` and contains only manifest commits: `git diff <default>..HEAD --name-only` must be empty or exactly `{docs/fleet/<slug>.md}`. Bail if any other path appears (mirrors the round-2 fix on PR #21 — the original `git rev-list --count` formulation incorrectly banned the user's own manifest commit).
    - Confirm `docs/fleet/<slug>.md` exists; if not, bail. No stub creation in v0.1.
 
 2. **Read + validate the manifest.** Parse the markdown table. Validate:
