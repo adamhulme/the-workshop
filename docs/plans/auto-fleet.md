@@ -29,7 +29,7 @@ The brainstorm (`docs/brainstorms/auto-fleet.md`) surfaced the core scoping deci
 
 2. **Read + validate the manifest.** Parse the markdown table. Validate:
    - Required columns: `id`, `description`, `status`, `branch` (optional), `pr` (optional).
-   - `status` ∈ `queued | running | done | failed | skipped`.
+   - `status` ∈ `queued | running | succeeded | failed | skipped`. (Names follow Argo Workflows / Temporal / GitHub Actions convention; `succeeded` pairs with `failed`.)
    - `description` text must not contain `|`, backticks, markdown link syntax `[...](...)`, or newlines. Reject the row with a clear error if any are present (table-rewrite safety).
    - `id` must be unique and slug-safe (kebab-case, lowercase ASCII alphanumerics + hyphens).
    - Row count with `status: queued` must be ≤ 5 (hard cap).
@@ -41,26 +41,28 @@ The brainstorm (`docs/brainstorms/auto-fleet.md`) surfaced the core scoping deci
 
 5. **Branching is fixed.** v0.1 supports independent branching only — each subtask's `/auto-do` creates its own `auto-do/<row-id>` branch off the default branch and opens a PR targeting default. No `## Branching` section is consulted in the manifest. Epic-branch mode is deferred to v1.
 
-6. **Dispatch loop.** For each row in `queued` order:
-   - **Idempotency check.** Check if a branch named `auto-do/<row-id>` already exists locally or remotely. If so, surface via `AskUserQuestion`: "Branch already exists for row `<id>`. Skip, dispatch anyway, or cancel the fleet?" with options Skip / Dispatch / Cancel.
-   - **Hash check.** Re-read the manifest from disk and compare its SHA-256 to the value captured in step 2. If changed, halt — "manifest edited mid-run, halting" — without writing anything further. Final status: `halted:manifest-tampered`.
-   - Mark row `running`, write manifest **to disk only** (no commit, no push).
-   - **Dispatch /auto-do.** Read `commands/auto-do.md` from `.claude/commands/` (project) then `~/.claude/commands/` (user) — same resolution pattern `/auto-do` itself uses for sub-skills. Apply its numbered steps with its auto-decision policy against `<description>` from the row. This is **orchestration-pattern reuse, not subroutine-call**; the same brittle coupling `/auto-do` already accepts for `/plan`, `/plan-eng-review`, etc.
+6. **Dispatch loop.** For each row in `queued` order. **All state changes during the loop are in-memory only** — no disk writes, no commits, no pushes happen until step 8. Writing to disk mid-fleet would dirty the working tree on `fleet/<slug>` and `/auto-do`'s pre-flight (`git status --porcelain` must be empty) would bail before any subtask runs (this was the round-1 Codex P0 finding on PR #21).
+   - **Idempotency check.** Check if a branch named `auto-do/<row-id>` already exists locally (`git branch --list`) or remotely (`git ls-remote --heads`), AND check for any prior PR via `gh pr list --head auto-do/<id> --state all`. If any are present, surface via `AskUserQuestion`: "Branch `auto-do/<id>` already exists (prior PR: `<state-or-none>`). Skip, dispatch anyway, or cancel the fleet?" with options Skip *(Recommended)* / Dispatch anyway / Cancel.
+   - **Hash check.** Re-read the manifest from disk and compare its SHA-256 to the value captured in step 2. If changed, set `Final status: halted:manifest-tampered` in memory, break out of the loop, and continue to step 8 — which will detect the tamper itself and refuse to write.
+   - Mark row `running` **in memory only**.
+   - **Dispatch /auto-do.** Read `commands/auto-do.md` from `.claude/commands/` (project) then `~/.claude/commands/` (user) — same resolution pattern `/auto-do` itself uses for sub-skills. Apply its numbered steps with its auto-decision policy against `<description>` from the row, with the explicit override that step 1's slug derivation produces `<id>` verbatim. This is **orchestration-pattern reuse, not subroutine-call**; the same brittle coupling `/auto-do` already accepts for `/plan`, `/plan-eng-review`, etc. `/auto-do` will leave the working tree on `auto-do/<id>` when it returns; the fleet does **not** check out back to `fleet/<slug>` between iterations (no disk write happens between iterations, so the branch the dispatch loop sits on doesn't matter).
    - **Outcome classification.** Match `/auto-do`'s final-report `Final status:` line to derive the terminal state:
-     - `succeeded` → row `done`.
-     - `failed:round-2-must-fix` | `failed:test-gate` | `failed:complexity-smell` → row `failed`.
-     - Anything else (or `Final status:` line missing) → row `failed` with `error_summary: "unrecognised /auto-do report"`.
-   - On `done`: capture `branch` and `pr` URLs into the manifest row in memory, write to disk only, continue.
-   - On `failed`: write to disk, **halt the fleet**. Continue to step 8 (no further dispatch).
+     - `succeeded` → row state `succeeded`. Capture `branch = auto-do/<id>` and `pr = <pr-url>` into the row in memory.
+     - `failed:round-2-must-fix` | `failed:test-gate` | `failed:complexity-smell` → row state `failed`. Set the fleet's `Final status:` to `halted:round-2-failure` / `halted:test-gate` / `halted:complexity-smell` accordingly.
+     - Anything else (or `Final status:` line missing) → row state `failed` with note "unrecognised /auto-do report" attached. Set fleet's `Final status:` to `halted:unrecognised-auto-do-report`.
+   - **Per-task PR header** (if `pr` is set): edit the PR body once via `gh pr edit <pr> --body-file <tmp>` to prepend `## Fleet context\n\nPart of fleet [<slug>](<manifest-url>) — see manifest for sibling status.\n\n`. Manifest is the single index; no sibling cross-linking, no final-status echo.
+   - On `failed`: break out of the loop. Continue to step 8 (no further dispatch).
 
-7. **Per-task PR header.** When `/auto-do` creates the PR for a subtask, `/auto-fleet` edits the PR body once to prepend a single `## Fleet context` line: `Part of fleet [<slug>](<manifest-link>) — see manifest for sibling status.` No sibling cross-linking, no final-status echo, no churn on later subtasks. The manifest is the only index.
+7. *(Per-task PR header is now folded into step 6 since it must run inline with each dispatch; no standalone step 7.)*
 
-8. **Final fleet report.** Append a `## Fleet outcome` section to the manifest:
-   - Counts: `done` / `failed` / `skipped` / `queued`-remaining.
-   - Links to all PRs created.
-   - `Final status: succeeded | halted:round-2-failure | halted:test-gate | halted:complexity-smell | halted:manifest-tampered | halted:rate-limit | halted:user-cancel | halted:branch-collision-cancel`.
-   - Update YAML key `last_updated` in the manifest frontmatter.
-   - Commit `docs/fleet/<slug>.md` on the `fleet/<slug>` control-plane branch and push. **One commit per fleet run** — no per-transition pushes.
+8. **Final fleet report.** This is the only place `/auto-fleet` writes to disk, commits, and pushes.
+   - **Switch back to the fleet branch.** Run `git checkout fleet/<slug>` (the last `/auto-do` left the working tree on `auto-do/<id>`). Because all dispatch-loop state was held in memory, the fleet branch's working tree is clean — no merge / stash / restore needed.
+   - **Final hash check before writing.** Re-read `docs/fleet/<slug>.md` from disk and compute SHA-256. If it differs from `<initial-hash>` from step 2, halt without writing and without committing — the on-disk manifest stays as the user left it. Print a clear "manifest tampered, refusing to clobber" message; the fleet outcome lives only in the user-facing report (no on-disk record). v0.1 limitation.
+   - **Compose the final manifest in memory:** rewrite the `## Subtasks` table to reflect each row's terminal state; append `## Fleet outcome` with counts, PRs created, `Final status:`, and `Fleet auto-decisions:` sections; update YAML key `last_updated`.
+   - **Single disk write** to `docs/fleet/<slug>.md`. **Single commit** with message `/auto-fleet <slug>: <Final status>`. **Single push** via `git push --set-upstream origin fleet/<slug>`. If the push is rejected (branch protection, lost permissions), the local commit is preserved on `fleet/<slug>`; report the rejection clearly so the user can push manually.
+   - **One commit per fleet run** — no per-transition pushes.
+
+   `Final status:` is exactly one of: `succeeded`, `halted:round-2-failure`, `halted:test-gate`, `halted:complexity-smell`, `halted:unrecognised-auto-do-report`, `halted:manifest-tampered`, `halted:branch-collision-cancel`, `halted:user-cancel`.
 
 ### Hard rules (must appear in skill body)
 
@@ -72,22 +74,25 @@ The brainstorm (`docs/brainstorms/auto-fleet.md`) surfaced the core scoping deci
 - Never proceed past first failed subtask. (No `--keep-going` flag in v0.1.)
 - Never silently re-run a `running` row — bail with manual-reset instructions.
 - Never write to the manifest after detecting it was edited externally — bail.
+- Never write to the manifest mid-fleet. All row-state transitions are in-memory until step 8. (The round-1 Codex review on PR #21 found the original "write `running` to disk before dispatching `/auto-do`" flow would dirty the working tree and halt every subtask at its own pre-flight. In-memory-only state during the dispatch loop is the only correct approach.)
 
 ### Manifest state machine
 
+`running` is held **in memory only**; the manifest on disk transitions directly from `queued` to a terminal state at fleet end (step 8). Writing `running` to disk mid-fleet would dirty the working tree and prevent `/auto-do`'s pre-flight from passing.
+
 ```
-                ┌──────┐
-   ┌──────────► │ done │
-   │            └──────┘
+                  ┌───────────┐
+   ┌────────────► │ succeeded │
+   │              └───────────┘
    │
-[queued] ──► [running] ─┐
-   │            ▲       │
-   │            │       ├─► [failed]   (halts the fleet)
-   │            │       │
-   │            │       └─► [skipped]  (idempotency-gate skip)
-   │            │
-   │   manual-reset only (v0.1: edit the file)
-   └────────────┘
+[queued] ──► (running, in memory) ─┐
+   │                ▲              │
+   │                │              ├─► [failed]   (halts the fleet)
+   │                │              │
+   │                │              └─► [skipped]  (idempotency-gate skip)
+   │                │
+   │      manual-reset only (v0.1: edit the file)
+   └────────────────┘
 ```
 
 ### Auto-decision log strategy
@@ -114,13 +119,13 @@ last_updated:
 | products-log  | Add request-logging middleware to /products routes     | queued |        |    |
 ```
 
-`/auto-fleet` rewrites the table in place as it runs (in memory throughout; on disk between transitions; committed once at fleet end). The example above uses **genuinely independent subtasks** — v0.1 has no dependency model, so dependent rows produce undefined behaviour by design.
+`/auto-fleet` rewrites the table at fleet end (in memory throughout the dispatch loop; single disk write + commit + push at step 8). The example above uses **genuinely independent subtasks** — v0.1 has no dependency model, so dependent rows produce undefined behaviour by design.
 
 ### Manifest constraints
 
 - `description` text must not contain `|`, backticks, markdown link syntax `[...](...)`, or newlines (validated at step 2).
 - `id` is the row identifier and is used to derive the `auto-do/<id>` branch name; must be slug-safe.
-- `last_updated` is a YAML key in frontmatter, set by `/auto-fleet` on every disk-write.
+- `last_updated` is a YAML key in frontmatter, set by `/auto-fleet` at the single fleet-end disk-write.
 - The manifest hash is captured at fleet start; any external edit during a run halts the fleet (step 6 hash check).
 - The user is expected not to edit the manifest mid-run; if they do, the hash check halts the fleet rather than clobbering. (In contrast to v0.1's previous "undefined behaviour" wording — Codex was right that this needed real protection.)
 
@@ -340,3 +345,38 @@ Failure modes:    2 critical gaps flagged → TODOs (rate-limit smoke, push-reje
 TODOs:            6 proposed, 6 added (deferred to TODOS.md on first commit)
 Unresolved:       none — all decisions taken under auto-mode auto-decision policy
 ```
+
+---
+
+## Round-1 review (Codex on PR #21) + web-research fold-in — 2026-05-01
+
+After PR #21 was opened, the Codex GitHub bot's automated review surfaced **2 must-fix bugs** in the dispatch loop. The user also asked for a survey of existing fleet-runner patterns to inform the fix; an Agent dispatched to research multi-gitter, OpenRewrite, Argo Workflows, GitHub Actions matrix, jscodeshift, SWE-bench harness, and related tools returned several alignment recommendations. Both were folded into the skill body.
+
+### Bugs caught by Codex
+
+- **P0 — dirty-tree before /auto-do dispatch.** Step 6 originally wrote the manifest to disk as `running` *before* dispatching `/auto-do`. But `/auto-do`'s pre-flight requires a clean working tree (`git status --porcelain` must be empty); every dispatch would have halted immediately. The fleet could not have executed even one row.
+- **P1 — branch leak between iterations.** After `/auto-do` returns the working tree is on `auto-do/<id>`. The plan had no instruction to switch back to `fleet/<slug>` before later manifest writes; control-plane commits would have leaked onto subtask branches and into subtask PRs, violating the documented control-plane / data-plane separation.
+
+### Fix that resolves both
+
+- **Hold all row state in memory during the dispatch loop.** No disk writes between iterations.
+- **Single disk write + commit + push at step 8** after explicitly checking out `fleet/<slug>` (since `/auto-do` left us on `auto-do/<id>`).
+- **Final hash check at step 8** before writing — if the manifest was tampered with externally during the run, refuse to clobber.
+
+This trades **mid-run observability** (the on-disk manifest now shows `queued` until fleet completion) for **correctness** (P0 dirty-tree blocker resolved) and **simplicity** ("one commit per fleet run" becomes literal). Mid-run observability is a v1 ask if it ever surfaces from real usage.
+
+### Research fold-ins from the survey of existing fleet runners
+
+The Agent surveyed multi-gitter (lindell), OpenRewrite, Argo Workflows DAG mode, GitHub Actions matrix, jscodeshift, SWE-bench harness, Renovate, Temporal child workflows, claude-code-action idempotency patterns, and tick-md as a markdown-task-format example. Recurring patterns and recommendations applied:
+
+- **`done` → `succeeded` rename.** Argo / Temporal / GitHub Actions all use `succeeded` paired with `failed`. `done` is non-standard. Renamed across skill body, plan, manifest constraints, state machine, failure modes, and counts.
+- **Idempotency: also check PR state, not just branch.** Most surveyed tools check both. A stale `auto-do/<id>` branch from a closed/merged PR would otherwise block re-runs forever. Step 6's idempotency check now also runs `gh pr list --head auto-do/<id> --state all` and surfaces the prior PR state in the AskUserQuestion prompt.
+- **In-memory state during run is the right call.** No surveyed tool persists "running" state mid-flight to the same artifact the sub-task reads from. CLI fleet runners (multi-gitter, jscodeshift, OpenRewrite) all keep state in process memory and write a summary at exit. Single commit at fleet end matches this convention. Confirms the P0 fix is aligned with prior art.
+- **Halt-on-first-failure default is standard.** Argo, GHA matrix, Make, Bazel, Temporal child workflows. Confirms the v0.1 default; `--continue-on-error` is a v1 escape hatch if asked.
+- **Hard cap of 5 framed as a v0.1 guard rail.** Mainstream fleet runners have no cap or run hundreds (multi-gitter unbounded, SWE-bench hundreds, GHA matrix capped at 256). v0.1's cap of 5 is unusually tight and is now described as "a guard rail until real usage justifies raising it" rather than a fundamental design point.
+- **Markdown-table manifest acknowledged as unusual.** Every surveyed fleet runner uses YAML or JSON; markdown-table is an *agent-tooling* idiom (skills, agent prompt formats). Kept anyway because the manifest lives next to other markdown docs in `docs/`, but flagged as a deliberate trade against tooling-friendliness in the skill body.
+
+### Unresolved
+
+- **`halted:rate-limit` outcome.** Originally listed as a possible final-status string. The round-1 fix replaced it with `halted:unrecognised-auto-do-report` and removed the explicit rate-limit halt path. Reasoning: rate-limit failures bubble up as `/auto-do` failures already; `/auto-fleet` doesn't need to detect them separately. The "rate-limit smoke" TODO from the eng review remains as a manual-verification gap; the explicit `halted:rate-limit` status is dropped from v0.1.
+- **Push-rejection on `fleet/<slug>` at step 8.** Now explicitly handled: local commit is preserved, the rejection is reported clearly so the user can push manually. Demoted from "critical gap" to "documented limitation"; the manual push escape is the v0.1 answer.

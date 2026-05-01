@@ -26,16 +26,18 @@ Today the only way is manually chaining `/auto-do` invocations from a notebook o
 
 v0.1 is a serial dispatcher: reads a user-authored manifest at `docs/fleet/<slug>.md`, runs `/auto-do` per row in queue order, halts on first failure, and writes a single commit at the end on a dedicated `fleet/<slug>` control-plane branch.
 
-Non-negotiable v0.1 constraints (from `docs/plans/auto-fleet.md` post-eng-review):
+Non-negotiable v0.1 constraints (from `docs/plans/auto-fleet.md` post-eng-review and the round-1 fix on PR #21):
 
-- **Hard cap = 5 subtasks** per run. No flag override; users who need more break the task into smaller fleets.
-- **Stop on first failure.** No `--keep-going` flag. Trust collapse from cascading bad PRs is the larger risk.
+- **Hard cap = 5 subtasks** per run. No flag override. Framed as a v0.1 guard rail (mainstream fleet runners — multi-gitter, OpenRewrite, SWE-bench — have no cap or run hundreds), not a permanent design point.
+- **Stop on first failure.** No `--keep-going` flag. Aligns with Argo / GHA matrix / Make / Bazel / Temporal child-workflow defaults.
 - **Independent branching only.** Each subtask's `/auto-do` creates its own `auto-do/<row-id>` branch off the default branch and opens a PR targeting default. Epic-branch mode is deferred to v1.
-- **Markdown-only.** No code ships. Manifest is a markdown table rewritten in place.
+- **Markdown-only.** No code ships. Manifest is a markdown table; an *agent-tooling* idiom unusual among mainstream fleet runners (which prefer YAML/JSON), kept deliberately so the manifest lives next to other workshop docs.
 - **Control-plane branch (`fleet/<slug>`).** Holds only the manifest; never merged; resolves the "never push to default" vs "commit + push manifest" contradiction.
-- **SHA-256 hash check on manifest.** Captured at fleet start; re-checked before each disk write. External edits halt cleanly with `Final status: halted:manifest-tampered` rather than silently clobbering user edits.
-- **Idempotency check** before each dispatch — if `auto-do/<row-id>` branch already exists, surface skip/dispatch/cancel via `AskUserQuestion`.
-- **Outcome classification keyed off explicit strings.** `/auto-do`'s `Final status:` line strings (`succeeded`, `failed:round-2-must-fix`, `failed:test-gate`, `failed:complexity-smell`) drive the manifest row state. Anything unrecognised → `failed` with an `error_summary` of "unrecognised /auto-do report".
+- **In-memory state during the dispatch loop; single disk write at fleet end.** Round-1 Codex review on PR #21 caught that writing `running` to disk before dispatching `/auto-do` would dirty the working tree and halt every subtask at its own pre-flight (P0). Fix: hold all row state in memory; write + commit + push **once** at step 8 after explicit `git checkout fleet/<slug>` (P1, branch-leak fix).
+- **SHA-256 hash check on manifest.** Captured at fleet start; checked at each iteration's start AND once more at step 8 before writing. External edits halt cleanly with `Final status: halted:manifest-tampered` rather than silently clobbering user edits.
+- **Idempotency check** before each dispatch — checks branch existence (local + remote) AND prior PR state via `gh pr list --head auto-do/<id> --state all`. Surfaces `Skip` *(Recommended)* / `Dispatch anyway` / `Cancel` via `AskUserQuestion`. Catches stale branches from closed/merged PRs as well as currently-running ones.
+- **Outcome classification keyed off explicit strings.** `/auto-do`'s `Final status:` line strings (`succeeded`, `failed:round-2-must-fix`, `failed:test-gate`, `failed:complexity-smell`) drive the manifest row state. Anything unrecognised → `failed` with `Final status: halted:unrecognised-auto-do-report`.
+- **State names follow industry convention.** `queued | running | succeeded | failed | skipped` matches Argo Workflows / Temporal / GitHub Actions; `succeeded` pairs with `failed` more cleanly than the original `done`.
 
 `/auto-fleet` orchestrates `/auto-do` the same way `/auto-do` orchestrates `/plan` etc. — read `commands/auto-do.md` from `.claude/commands/` (project) or `~/.claude/commands/` (user), apply its numbered steps with its auto-decision policy. The brittle coupling is acknowledged in both the plan and the skill body.
 
@@ -60,3 +62,5 @@ Non-negotiable v0.1 constraints (from `docs/plans/auto-fleet.md` post-eng-review
 - **Sequencing.** `/auto-do` shipping first (PR #18) was the prerequisite. `/auto-fleet` couldn't compose with a non-existent skill. Same sequencing reason as `/browse` shipping before `/auto-do`.
 
 - **Brainstorm tensions resolved cleanly.** The brainstorm landed seven explicit tensions (User wants parallelism; Ops wants serialism; etc.). The simpler-v0.1 scope resolves all seven by deferring to v1: serial only, no auto-slicing, default-pause, low N hard cap, dispatcher-not-planner. The plan and eng review carried that scoping forward without re-litigating.
+
+- **Round-1 review (PR #21) caught two real bugs and confirmed the design against prior art.** The Codex GitHub bot found a P0 (writing `running` to disk before dispatching `/auto-do` dirties the working tree and breaks every subtask's pre-flight) and a P1 (no checkout-back to `fleet/<slug>` between iterations would leak control-plane writes onto subtask branches). The fix — hold all state in memory during the dispatch loop, single disk write + commit + push at step 8 — was independently validated by a survey of mainstream fleet runners (multi-gitter, OpenRewrite, jscodeshift, Argo Workflows, GitHub Actions matrix, SWE-bench harness). None persist mid-run state to the same artifact the sub-task reads from. Same survey drove three additional fold-ins: rename `done` → `succeeded` (Argo / Temporal / GHA convention), expand idempotency to include prior-PR check (catches stale branches from closed/merged PRs), and frame the hard cap of 5 as a v0.1 guard rail rather than a fundamental design decision. Full details in the plan's **Round-1 review** subsection.
