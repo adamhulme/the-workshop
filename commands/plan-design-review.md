@@ -96,6 +96,7 @@ Ask once: "Want an adversarial design review from Codex before we finalise? (y/n
 If yes, dispatch Codex via `Bash` — **pipe the prompt via stdin** and use the gstack dispatch pattern. Don't pass the prompt as a positional arg; long prompts hang in some shells and trip arg-length limits.
 
 ```bash
+PLAN_PATH="path/to/your/plan.md"   # set to the resolved plan file
 TMPF=$(mktemp)
 TMPERR=$(mktemp)
 {
@@ -121,7 +122,7 @@ Be opinionated. No hedging. Cap output at 800 words.
 THE PLAN:
 
 PROMPT_HEAD
-  cat <plan-path>
+  cat "$PLAN_PATH"
 } > "$TMPF"
 
 _REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
