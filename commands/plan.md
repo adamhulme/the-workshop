@@ -11,7 +11,7 @@ User arguments: $ARGUMENTS
 
 Every decision point in this skill — creating the folder, approving the plan, choosing the slug, resolving a slug collision — uses **`AskUserQuestion`**, not a trailing prose `(y/n)`. Trailing prose questions get buried under whatever you wrote above; `AskUserQuestion` surfaces a clean structured prompt with explicit options, and the user can type a custom answer via the auto-provided "Other" option.
 
-Don't stack `ExitPlanMode` on top of step 4 — this skill's approval gate **is** the gate. One gate is enough. (You may use `EnterPlanMode` during exploration if available.)
+**Don't use Claude Code's native plan mode tools (`EnterPlanMode` / `ExitPlanMode`)** for this skill. Their approval prompt is a second gate, and once `EnterPlanMode` is active, the `Write` at step 7 stays blocked until you `ExitPlanMode` — which re-prompts the user. Simulate plan-mode behaviour manually (read-only exploration, no file edits until step 7) and let step 4's `AskUserQuestion` be the single gate.
 
 ## Steps
 
@@ -24,12 +24,12 @@ Don't stack `ExitPlanMode` on top of step 4 — this skill's approval gate **is*
      - "Create `docs/plans/` and continue" — `mkdir -p docs/plans` then proceed
      - "Cancel — run `/init-workshop` first" — exit gracefully, mention `/init-workshop`
 
-3. **Enter plan-mode behaviour.** With the user's `$ARGUMENTS` describing the task:
-   - If you can request Claude Code's native plan mode (e.g. via `EnterPlanMode`), do so for exploration.
-   - Otherwise behave as if in plan mode: read relevant code, identify constraints, ask clarifying questions (use `AskUserQuestion` for any structured choices that arise; freeform clarifications can stay inline), draft a numbered plan with critical files and verification steps. Do not edit any files except the eventual plan output below.
-   - **Do not call `ExitPlanMode`.** Step 4's question is the approval gate.
+3. **Simulate plan-mode behaviour manually.** With the user's `$ARGUMENTS` describing the task:
+   - **Do not call `EnterPlanMode` or `ExitPlanMode`.** See the preamble — they introduce a second gate and `EnterPlanMode` blocks the `Write` at step 7.
+   - Read relevant code, identify constraints, ask clarifying questions (use `AskUserQuestion` for any structured choices; freeform clarifications can stay inline), draft a numbered plan with critical files and verification steps.
+   - Do not edit any files until step 7.
 
-4. **Get approval.** Present the drafted plan inline (or via the plan-mode draft if you used native plan mode), then dispatch `AskUserQuestion`:
+4. **Get approval.** Present the drafted plan inline, then dispatch `AskUserQuestion`:
    - Question: "Approve this plan and save it to `docs/plans/`?"
    - Header: "Approve plan"
    - Options:
