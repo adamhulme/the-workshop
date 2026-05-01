@@ -14,6 +14,12 @@ A bump is reserved until the next release; in-progress work lives under `[Unrele
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-01
+
+### Added
+
+- `/review-pr` — bounded 2-round PR review loop. Round 1: Codex CLI and the `pr-reviewer` agent review the diff in parallel; findings are deduped by `(file, line, category)` and grouped must-fix / should-fix / follow-up. Single user gate via `AskUserQuestion`. Main-thread Claude addresses must-fix items as a single fix-up commit; should-fix and follow-up items go verbatim to `TODOS.md`. Round 2: Codex re-reviews the new diff (role swap — Codex is the only voice that hasn't seen the post-fix code). Hard cap at 2 rounds — the cap is the point. Fix-up commits **auto-push** to the PR's head branch (no force, no `--no-verify`); refuses to push to default branch; prompts via `AskUserQuestion` if the branch has no upstream. Falls back to a `general-purpose` Agent in either Codex slot if `codex` is not on PATH.
+
 ## [0.3.0] — 2026-04-30
 
 ### Added

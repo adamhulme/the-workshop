@@ -118,6 +118,7 @@ A natural pairing: when a `/solution` reaches `outcome`, also run `/changelog` s
 - **About to flip a private repo public?** `/sanitise` does a denylist + LLM pass for client/internal references, auto-fixes known matches, prompts on novel ones, and audits the run to `docs/solutions/`.
 - **Auditing an existing app's design?** `/design-capture` reads the frontend, surfaces inconsistencies against a synthesised system, validates the recommended approach with you, and writes `DESIGN.md`.
 - **Want a six-perspective sanity check?** `/team-init` scaffolds a consultation team into the project (product, user, domain, architecture, risk, delivery). `/consult <question>` then dispatches all six personas in parallel and surfaces tensions. Pair with `/plan-eng-review` or `/plan-design-review` for single-perspective plan critique.
+- **Reviewing a PR?** `/review-pr <n>` runs Codex and the `pr-reviewer` agent in parallel, consolidates findings, addresses must-fix items as a single fix-up commit, then runs one Codex re-review on the new diff. Hard cap at 2 rounds. Fix-up commits auto-push to the PR's head branch.
 
 The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool, or directly when you want a focused second pass. They're not auto-invoked by the shipped skills today — pair them with the skills above as the workflow calls for it (e.g. dispatch `decision-distiller` over a long PR thread before drafting the matching `/solution`, or run `pr-reviewer` against a diff before merging).
 
@@ -206,6 +207,7 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/consult`](commands/consult.md) | Multi-perspective consultation with the project's persona team — surfaces disagreements, runs targeted rebuttals, synthesises with tensions preserved. |
 | [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance — with an optional independent Codex second opinion (`codex exec`). |
 | [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns — with an optional adversarial Codex outside voice (`codex exec`). |
+| [`/review-pr`](commands/review-pr.md) | Bounded 2-round PR review loop. Codex CLI and the `pr-reviewer` agent trade reviewer/implementer roles; round 1 in parallel, round 2 swap. Hard cap at 2 rounds. Fix-up commits **auto-push** to the PR branch (never to default branch, never `--force`). |
 
 ## Agents shipped
 
