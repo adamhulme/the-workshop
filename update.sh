@@ -52,7 +52,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Auto-detect scope when neither flag was passed.
+# Auto-detect scope when neither flag was passed. Default to user when no
+# manifest exists anywhere — pre-manifest installs and fresh boxes both land
+# here, and --project users pass the flag explicitly.
 if [[ -z "$SCOPE" ]]; then
   if [[ -f "$HOME/.claude/.workshop-manifest" ]]; then
     SCOPE="user"
@@ -61,23 +63,21 @@ if [[ -z "$SCOPE" ]]; then
     SCOPE="project"
     TARGET_BASE=".claude"
   else
-    echo "No workshop install detected at ~/.claude/ or ./.claude/." >&2
-    echo "Run install.sh first, or pass --user / --project to update.sh." >&2
-    exit 1
+    SCOPE="user"
+    TARGET_BASE="$HOME/.claude"
   fi
 fi
 
-if [[ ! -f "$TARGET_BASE/.workshop-manifest" ]]; then
-  echo "No manifest at $TARGET_BASE/.workshop-manifest — this scope hasn't been" >&2
-  echo "installed by a manifest-aware version of install.sh. Run install.sh first" >&2
-  echo "(it will write the manifest), then re-run update.sh." >&2
-  exit 1
-fi
-
-# Snapshot the existing manifest before install.sh overwrites it.
+# A missing manifest just means there's nothing to diff against for pruning
+# (e.g. an older pre-manifest install). install.sh will write a fresh manifest
+# and subsequent updates will prune normally.
+HAD_PREV_MANIFEST=0
 PREV_MANIFEST="$(mktemp)"
 trap 'rm -f "$PREV_MANIFEST"' EXIT
-grep -v '^#' "$TARGET_BASE/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$PREV_MANIFEST"
+if [[ -f "$TARGET_BASE/.workshop-manifest" ]]; then
+  HAD_PREV_MANIFEST=1
+  grep -v '^#' "$TARGET_BASE/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$PREV_MANIFEST"
+fi
 
 PREV_VERSION="unknown"
 if [[ -f "$TARGET_BASE/.workshop-version" ]]; then
@@ -106,32 +106,35 @@ echo ""
 bash "$INSTALL_SH" "--$SCOPE"
 
 # Diff old manifest vs new. Anything in old-but-not-new was removed upstream
-# and should be pruned from the install target.
-NEW_MANIFEST="$(mktemp)"
-trap 'rm -f "$PREV_MANIFEST" "$NEW_MANIFEST"; rm -rf "$CLONE_TMP"' EXIT
-grep -v '^#' "$TARGET_BASE/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$NEW_MANIFEST"
-
+# and should be pruned from the install target. Skip entirely when there was
+# no previous manifest — nothing to diff against.
 PRUNED=0
 SKIPPED=0
-# Only allow pruning of paths matching the exact commands/<name>.md or
-# agents/<name>.md shape. A tampered manifest containing .., absolute paths,
-# or anything outside this shape is rejected outright — never trust
-# manifest-supplied paths to construct an rm target without re-validating.
-ALLOWED_RE='^(commands|agents)/[A-Za-z0-9._-]+\.md$'
-while IFS= read -r relpath; do
-  [[ -z "$relpath" ]] && continue
-  if [[ ! "$relpath" =~ $ALLOWED_RE ]]; then
-    echo "  skipped: $relpath (manifest entry outside expected shape; not pruning)" >&2
-    SKIPPED=$((SKIPPED + 1))
-    continue
-  fi
-  full="$TARGET_BASE/$relpath"
-  if [[ -f "$full" ]]; then
-    rm -f "$full"
-    echo "  pruned: $relpath (no longer in upstream)"
-    PRUNED=$((PRUNED + 1))
-  fi
-done < <(comm -23 "$PREV_MANIFEST" "$NEW_MANIFEST")
+if [[ "$HAD_PREV_MANIFEST" -eq 1 ]]; then
+  NEW_MANIFEST="$(mktemp)"
+  trap 'rm -f "$PREV_MANIFEST" "$NEW_MANIFEST"; rm -rf "$CLONE_TMP"' EXIT
+  grep -v '^#' "$TARGET_BASE/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$NEW_MANIFEST"
+
+  # Only allow pruning of paths matching the exact commands/<name>.md or
+  # agents/<name>.md shape. A tampered manifest containing .., absolute paths,
+  # or anything outside this shape is rejected outright — never trust
+  # manifest-supplied paths to construct an rm target without re-validating.
+  ALLOWED_RE='^(commands|agents)/[A-Za-z0-9._-]+\.md$'
+  while IFS= read -r relpath; do
+    [[ -z "$relpath" ]] && continue
+    if [[ ! "$relpath" =~ $ALLOWED_RE ]]; then
+      echo "  skipped: $relpath (manifest entry outside expected shape; not pruning)" >&2
+      SKIPPED=$((SKIPPED + 1))
+      continue
+    fi
+    full="$TARGET_BASE/$relpath"
+    if [[ -f "$full" ]]; then
+      rm -f "$full"
+      echo "  pruned: $relpath (no longer in upstream)"
+      PRUNED=$((PRUNED + 1))
+    fi
+  done < <(comm -23 "$PREV_MANIFEST" "$NEW_MANIFEST")
+fi
 
 NEW_VERSION="$(tr -d '[:space:]' < "$TARGET_BASE/.workshop-version" 2>/dev/null || echo unknown)"
 
