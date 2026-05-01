@@ -23,17 +23,20 @@ The brainstorm (`docs/brainstorms/auto-fleet.md`) surfaced the core scoping deci
 
 ## Numbered steps (the skill body)
 
-1. **Pre-flight.** Inherit `/auto-do`'s pre-flight checks (git repo, dirty tree, `gh` auth, default branch capture, `gh pr ready --undo` mode detection). Plus fleet-specific:
-   - Refuse to run on the default branch — caller must be on a `fleet/<slug>` control-plane branch (see "Control-plane branch" below).
-   - Confirm `docs/fleet/<slug>.md` exists; if not, bail with instructions: "Author a manifest at `docs/fleet/<slug>.md` first — see manifest format below — then re-invoke." No stub creation in v0.1.
+1. **Pre-flight.** Inherit `/auto-do`'s pre-flight checks (git repo, dirty tree, `gh` auth, default branch capture, `gh pr ready --undo` mode detection). Plus fleet-specific, in this order:
+   - Derive `<slug>` from `$ARGUMENTS` first (kebab-case validation, ≤ 50 chars). All later steps refer to `<slug>` by the derived value, never `$ARGUMENTS` raw.
+   - Refuse to run on the default branch; require current branch == `fleet/<slug>`.
+   - Verify the fleet branch is rooted on `<default>`: `git rev-list --count <default>..HEAD` must be 0. (Mirrors `/auto-do`'s divergence guard. Bail otherwise; the user re-creates the branch from `<default>` and re-invokes.)
+   - Confirm `docs/fleet/<slug>.md` exists; if not, bail. No stub creation in v0.1.
 
 2. **Read + validate the manifest.** Parse the markdown table. Validate:
-   - Required columns: `id`, `description`, `status`, `branch` (optional), `pr` (optional).
+   - Frontmatter `slug` must equal the derived `<slug>` from step 1 (not `$ARGUMENTS` raw).
+   - Header row must enumerate exactly these columns in order: `id`, `description`, `status`, `branch`, `pr`. (`branch` and `pr` cells may be empty for `queued` rows; the columns themselves are required.)
    - `status` ∈ `queued | running | succeeded | failed | skipped`. (Names follow Argo Workflows / Temporal / GitHub Actions convention; `succeeded` pairs with `failed`.)
    - `description` text must not contain `|`, backticks, markdown link syntax `[...](...)`, or newlines. Reject the row with a clear error if any are present (table-rewrite safety).
    - `id` must be unique and slug-safe (kebab-case, lowercase ASCII alphanumerics + hyphens).
    - Row count with `status: queued` must be ≤ 5 (hard cap).
-   - Compute and store the manifest's SHA-256 hash for tamper detection in step 6.
+   - Compute and store the manifest's SHA-256 hash for the single tamper check at step 8. (No per-iteration re-read during the dispatch loop — `/auto-do` switches the working tree to `auto-do/<id>` off `<default>`, where the fleet manifest doesn't exist; mid-loop re-reads would always fail.)
 
 3. **Resumability check.** If any row is in `running` state from a prior crashed run, bail with manual-reset instructions: "N rows are stuck in `running`. Edit the manifest manually to reset them to `queued` (or mark `failed`/`skipped`), then re-invoke." v0.1 does not auto-reset; the user must intervene.
 
@@ -41,28 +44,31 @@ The brainstorm (`docs/brainstorms/auto-fleet.md`) surfaced the core scoping deci
 
 5. **Branching is fixed.** v0.1 supports independent branching only — each subtask's `/auto-do` creates its own `auto-do/<row-id>` branch off the default branch and opens a PR targeting default. No `## Branching` section is consulted in the manifest. Epic-branch mode is deferred to v1.
 
-6. **Dispatch loop.** For each row in `queued` order. **All state changes during the loop are in-memory only** — no disk writes, no commits, no pushes happen until step 8. Writing to disk mid-fleet would dirty the working tree on `fleet/<slug>` and `/auto-do`'s pre-flight (`git status --porcelain` must be empty) would bail before any subtask runs (this was the round-1 Codex P0 finding on PR #21).
-   - **Idempotency check.** Check if a branch named `auto-do/<row-id>` already exists locally (`git branch --list`) or remotely (`git ls-remote --heads`), AND check for any prior PR via `gh pr list --head auto-do/<id> --state all`. If any are present, surface via `AskUserQuestion`: "Branch `auto-do/<id>` already exists (prior PR: `<state-or-none>`). Skip, dispatch anyway, or cancel the fleet?" with options Skip *(Recommended)* / Dispatch anyway / Cancel.
-   - **Hash check.** Re-read the manifest from disk and compare its SHA-256 to the value captured in step 2. If changed, set `Final status: halted:manifest-tampered` in memory, break out of the loop, and continue to step 8 — which will detect the tamper itself and refuse to write.
+6. **Dispatch loop.** For each row in `queued` order. **All state changes during the loop are in-memory only** — no disk writes, no commits, no pushes happen until step 8. The dispatch loop also does **not** re-read the manifest from disk: `/auto-do` switches the working tree to `auto-do/<id>` (off `<default>`), where `docs/fleet/<slug>.md` doesn't exist. Hash check is single-shot at step 8. Per-task PR-body edits also wait until step 8, after the manifest is pushed and `<manifest-url>` resolves.
+   - **Idempotency check.** Check branch existence (local + remote) AND prior PR state via `gh pr list --head auto-do/<id> --state all`. If any are present, surface via `AskUserQuestion`: "Branch `auto-do/<id>` already exists (prior PR: `<state-or-none>`). Skip, dispatch anyway, or cancel?" with options `Skip *(Recommended)* / Dispatch anyway / Cancel`.
    - Mark row `running` **in memory only**.
-   - **Dispatch /auto-do.** Read `commands/auto-do.md` from `.claude/commands/` (project) then `~/.claude/commands/` (user) — same resolution pattern `/auto-do` itself uses for sub-skills. Apply its numbered steps with its auto-decision policy against `<description>` from the row, with the explicit override that step 1's slug derivation produces `<id>` verbatim. This is **orchestration-pattern reuse, not subroutine-call**; the same brittle coupling `/auto-do` already accepts for `/plan`, `/plan-eng-review`, etc. `/auto-do` will leave the working tree on `auto-do/<id>` when it returns; the fleet does **not** check out back to `fleet/<slug>` between iterations (no disk write happens between iterations, so the branch the dispatch loop sits on doesn't matter).
-   - **Outcome classification.** Match `/auto-do`'s final-report `Final status:` line to derive the terminal state:
-     - `succeeded` → row state `succeeded`. Capture `branch = auto-do/<id>` and `pr = <pr-url>` into the row in memory.
-     - `failed:round-2-must-fix` | `failed:test-gate` | `failed:complexity-smell` → row state `failed`. Set the fleet's `Final status:` to `halted:round-2-failure` / `halted:test-gate` / `halted:complexity-smell` accordingly.
-     - Anything else (or `Final status:` line missing) → row state `failed` with note "unrecognised /auto-do report" attached. Set fleet's `Final status:` to `halted:unrecognised-auto-do-report`.
-   - **Per-task PR header** (if `pr` is set): edit the PR body once via `gh pr edit <pr> --body-file <tmp>` to prepend `## Fleet context\n\nPart of fleet [<slug>](<manifest-url>) — see manifest for sibling status.\n\n`. Manifest is the single index; no sibling cross-linking, no final-status echo.
+   - **Dispatch /auto-do.** Read `commands/auto-do.md` from `.claude/commands/` (project) then `~/.claude/commands/` (user). Apply its numbered steps with its auto-decision policy against `<description>` from the row, with the explicit override that step 1's slug derivation produces `<id>` verbatim. **Orchestration-pattern reuse, not subroutine-call.** `/auto-do` will leave the working tree on `auto-do/<id>` when it returns.
+   - **Outcome classification.** Match `/auto-do`'s final-report `Final status:` line (its emitted token is `success`, not `succeeded` — see `commands/auto-do.md:212`):
+     - `success` → row state `succeeded`. Capture `branch = auto-do/<id>` and `pr = <pr-url>` into the row in memory.
+     - `failed:round-2-must-fix` → row `failed`; fleet `Final status: halted:round-2-failure`.
+     - `failed:test-gate` → row `failed`; fleet `Final status: halted:test-gate`.
+     - `failed:complexity-smell` → row `failed`; fleet `Final status: halted:complexity-smell`.
+     - `failed:ambiguity` → row `failed`; fleet `Final status: halted:auto-do-ambiguity`. (Preserves the actionable signal from `/auto-do`'s "fail closed on ambiguity" exit.)
+     - Anything else (or `Final status:` line missing) → row `failed` with first 200 chars of the actual report captured to the row's note; fleet `Final status: halted:unrecognised-auto-do-report`.
    - On `failed`: break out of the loop. Continue to step 8 (no further dispatch).
 
-7. *(Per-task PR header is now folded into step 6 since it must run inline with each dispatch; no standalone step 7.)*
+7. *(No standalone step 7 — per-task PR-body edits are deferred to step 8 so `<manifest-url>` resolves after the fleet branch is pushed.)*
 
 8. **Final fleet report.** This is the only place `/auto-fleet` writes to disk, commits, and pushes.
-   - **Switch back to the fleet branch.** Run `git checkout fleet/<slug>` (the last `/auto-do` left the working tree on `auto-do/<id>`). Because all dispatch-loop state was held in memory, the fleet branch's working tree is clean — no merge / stash / restore needed.
-   - **Final hash check before writing.** Re-read `docs/fleet/<slug>.md` from disk and compute SHA-256. If it differs from `<initial-hash>` from step 2, halt without writing and without committing — the on-disk manifest stays as the user left it. Print a clear "manifest tampered, refusing to clobber" message; the fleet outcome lives only in the user-facing report (no on-disk record). v0.1 limitation.
-   - **Compose the final manifest in memory:** rewrite the `## Subtasks` table to reflect each row's terminal state; append `## Fleet outcome` with counts, PRs created, `Final status:`, and `Fleet auto-decisions:` sections; update YAML key `last_updated`.
-   - **Single disk write** to `docs/fleet/<slug>.md`. **Single commit** with message `/auto-fleet <slug>: <Final status>`. **Single push** via `git push --set-upstream origin fleet/<slug>`. If the push is rejected (branch protection, lost permissions), the local commit is preserved on `fleet/<slug>`; report the rejection clearly so the user can push manually.
+   - **Working-tree cleanliness check before checkout.** Run `git status --porcelain` while still on `auto-do/<id>` (or whatever branch the last `/auto-do` left us on). If non-empty, bail without checkout / write / commit / push: the in-memory fleet state is lost; user investigates manually. Round-1 Codex finding on PR #21: a crashed `/auto-do` can leave dirty / untracked state that would otherwise contaminate the manifest commit.
+   - **Switch back to the fleet branch.** Run `git checkout fleet/<slug>`. Working tree is clean by construction (manifest wasn't touched on disk during the loop).
+   - **Final hash check before writing.** Re-read `docs/fleet/<slug>.md` from disk and compute SHA-256. If it differs from step 2's `<initial-hash>`, refuse to clobber: bail without writing or committing; fleet outcome lives only in the user-facing report. v0.1 limitation.
+   - **Compose the final manifest in memory:** rewrite the `## Subtasks` table; append `## Fleet outcome` with counts, PRs created, `Final status:`, `Fleet auto-decisions:`; update YAML key `last_updated`.
+   - **Single disk write → single commit → single push.** `git push --set-upstream origin fleet/<slug>`. If rejected, local commit preserved; report clearly; per-task PR-body edits below are skipped.
+   - **Per-task PR-body fleet-context headers** (deferred from step 6 so `<manifest-url>` resolves). For each row whose `pr` is set, edit the PR body once to prepend `## Fleet context\n\nPart of fleet [<slug>](<manifest-url>) — see manifest for sibling status.\n\n`. Skip if push was rejected.
    - **One commit per fleet run** — no per-transition pushes.
 
-   `Final status:` is exactly one of: `succeeded`, `halted:round-2-failure`, `halted:test-gate`, `halted:complexity-smell`, `halted:unrecognised-auto-do-report`, `halted:manifest-tampered`, `halted:branch-collision-cancel`, `halted:user-cancel`.
+   `Final status:` is exactly one of: `succeeded`, `halted:round-2-failure`, `halted:test-gate`, `halted:complexity-smell`, `halted:auto-do-ambiguity`, `halted:unrecognised-auto-do-report`, `halted:manifest-tampered`, `halted:branch-collision-cancel`, `halted:user-cancel`.
 
 ### Hard rules (must appear in skill body)
 
