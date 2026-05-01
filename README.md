@@ -12,20 +12,6 @@ An opinionated, harness-aware playbook for [Compound Engineering](https://every.
 - An exhaustive framework. It ships what's lived-in; new skills land as the practice produces them.
 - A community project. It's a personal canon. Fork freely.
 
-## Credit and departure
-
-The seed comes from Every's [Compound Engineering guide](https://every.to/guides/compound-engineering). What's kept:
-
-- Every meaningful task should leave an artifact.
-- The system gets better over time because each artifact is fuel for the next task.
-- Engineering is partly building your own tools — not just shipping features.
-
-What's different here:
-
-- **Harness-opinionated.** Built around Claude Code's slash commands and skills.
-- **Inputs get equal treatment.** A dedicated `docs/research/` subtree for source material — interviews, product context — with a structured format. The article focuses on outputs.
-- **Ships as runnable code.** Every recommendation maps to a file you can install.
-
 ## Install
 
 Clone the repo and run the installer:
@@ -198,9 +184,19 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Pairs well with `/solution` and `/brainstorm` — dispatchable from any skill, or directly from your own review of a long discussion. |
 | [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
 
-## Roadmap
+## Credit and departure
 
-The initial roadmap shipped. Future skills land here as the practice produces them — when a workflow has been used enough times to know what its skill should do.
+The seed comes from Every's [Compound Engineering guide](https://every.to/guides/compound-engineering). What's kept:
+
+- Every meaningful task should leave an artifact.
+- The system gets better over time because each artifact is fuel for the next task.
+- Engineering is partly building your own tools — not just shipping features.
+
+What's different here:
+
+- **Harness-opinionated.** Built around Claude Code's slash commands and skills.
+- **Inputs get equal treatment.** A dedicated `docs/research/` subtree for source material — interviews, product context — with a structured format. The article focuses on outputs.
+- **Ships as runnable code.** Every recommendation maps to a file you can install.
 
 ## License
 
