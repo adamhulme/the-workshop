@@ -36,6 +36,7 @@ The workshop runs without any of these. Each one unlocks a specific capability �
 | [**Codex CLI**](https://github.com/openai/codex) on `PATH` | Cross-model independent second opinion. Runs as `codex exec --skip-git-repo-check`; falls back to a `general-purpose` Agent if missing. | `/plan-eng-review`, `/plan-design-review` |
 | [**Atlassian MCP**](https://www.atlassian.com/platform/remote-mcp-server) configured in Claude Code | Pull Jira issues / Confluence pages directly into research, sweep your Jira queue. Skills prompt for paste-in fallback if missing. | `/research` (Jira ID, Confluence URL/ID), `/triage` (Jira queue sweep) |
 | **`gh` CLI** authenticated | Read PR titles/bodies and unresolved review threads on the current branch. Skills skip the relevant pass if missing. | `/triage` (PR-comment sweep), `/changelog` (PR enrichment) |
+| [**Playwright MCP**](https://github.com/microsoft/playwright-mcp) (or Chrome DevTools MCP) configured in Claude Code | Drive a visible browser to verify changes or walk a user flow. Without it, `/browse` prints a setup snippet and exits. | `/browse` (headed sessions, `--setup` for credential storage state) |
 
 None are hard dependencies — the workshop is opinionated about Claude Code as the runtime, not about which model you bring as a second voice or which issue tracker you use. Install the ones that match your workflow.
 
@@ -105,6 +106,7 @@ A natural pairing: when a `/solution` reaches `outcome`, also run `/changelog` s
 - **Auditing an existing app's design?** `/design-capture` reads the frontend, surfaces inconsistencies against a synthesised system, validates the recommended approach with you, and writes `DESIGN.md`.
 - **Want a six-perspective sanity check?** `/team-init` scaffolds a consultation team into the project (product, user, domain, architecture, risk, delivery). `/consult <question>` then dispatches all six personas in parallel and surfaces tensions. Pair with `/plan-eng-review` or `/plan-design-review` for single-perspective plan critique.
 - **Reviewing a PR?** `/review-pr <n>` runs Codex and the `pr-reviewer` agent in parallel, consolidates findings, addresses must-fix items as a single fix-up commit, then runs one Codex re-review on the new diff. Hard cap at 2 rounds. Fix-up commits auto-push to the PR's head branch.
+- **Want Claude to drive a real browser to verify a UI change?** `/browse <url> <scenario>` orchestrates Playwright MCP (or Chrome DevTools MCP) in headed mode, captures screenshots, and writes the session to `docs/research/interviews/<slug>.md`. First time on an auth-gated app, run `/browse --setup <login-url>` once — Playwright's `storageState` is persisted to `.claude/browse/storage-state.json` (gitignored) and reused on every subsequent run.
 
 The agents (`code-archaeologist`, `decision-distiller`, `pr-reviewer`) are dispatchable from any skill via the Agent tool, or directly when you want a focused second pass. They're not auto-invoked by the shipped skills today — pair them with the skills above as the workflow calls for it (e.g. dispatch `decision-distiller` over a long PR thread before drafting the matching `/solution`, or run `pr-reviewer` against a diff before merging).
 
@@ -194,6 +196,7 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance — with an optional independent Codex second opinion (`codex exec`). |
 | [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns — with an optional adversarial Codex outside voice (`codex exec`). |
 | [`/review-pr`](commands/review-pr.md) | Bounded 2-round PR review loop. Codex CLI and the `pr-reviewer` agent trade reviewer/implementer roles; round 1 in parallel, round 2 swap. Hard cap at 2 rounds. Fix-up commits **auto-push** to the PR branch (never to default branch, never `--force`). |
+| [`/browse`](commands/browse.md) | Drive a visible browser via Playwright MCP (or Chrome DevTools MCP) so the user can watch Claude verify a change or walk a flow; capture the session as a structured research note plus screenshots under `docs/research/interviews/<slug>(-screenshots)/`. `--setup` mode persists Playwright `storageState` to `.claude/browse/storage-state.json` (gitignored) for one-shot login on auth-gated apps. Read-only by default; destructive actions gated per-step. **Naming caveat:** collides with gstack's `browse` skill — install with `--project` scope or rename locally if both are present. |
 
 ## Agents shipped
 
