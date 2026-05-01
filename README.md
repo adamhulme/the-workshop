@@ -26,75 +26,6 @@ What's different here:
 - **Inputs get equal treatment.** A dedicated `docs/research/` subtree for source material — interviews, product context — with a structured format. The article focuses on outputs.
 - **Ships as runnable code.** Every recommendation maps to a file you can install.
 
-## The folder convention
-
-Adopt this layout in any project where you want the workshop's discipline:
-
-```
-project/
-├── CLAUDE.md             # agent instructions, preferences, patterns
-├── docs/                 # every artifact lives here, sorted by type
-│   ├── research/         # source material that fuels future work
-│   │   ├── interviews/   # structured customer interview notes
-│   │   └── context/      # product context, market and competitor notes
-│   ├── brainstorms/      # ideation
-│   ├── plans/            # approved plans (post-ExitPlanMode)
-│   ├── solutions/        # solved problems → institutional knowledge
-│   └── changelog.md      # /changelog output
-└── todos/                # triage findings, follow-ups
-```
-
-**The flow.** Research feeds brainstorms. Brainstorms harden into plans. Plans execute into solutions. Solutions get summarised in the changelog. Each layer has its own folder so you (and any skill) know exactly where to look — or where to write.
-
-## Recommended formats
-
-### Customer interviews → `docs/research/interviews/<participant-id>.md`
-
-Long-form interview transcripts get converted (manually, or via [`/research`](commands/research.md)) into a structured AI-friendly format:
-
-````markdown
----
-participant: Marketing Manager, B2B SaaS
-date: 2026-01-15
-focus: Dashboard usage patterns
----
-
-## Key Insights
-
-### Insight: Morning dashboard ritual
-**Quote**: "First thing every morning, I check for red flags."
-**Implication**: Dashboard needs to surface problems quickly.
-**Confidence**: 4/5 participants
-````
-
-Why this shape: future skills (synthesis, brainstorming) can scan many interviews and pull structured `### Insight:` blocks without parsing prose. Frontmatter makes filtering by participant or focus area trivial.
-
-## Skills shipped
-
-| Command | What it does |
-|---------|--------------|
-| [`/init-workshop`](commands/init-workshop.md) | Set up the workshop's folder convention in any project, asking before each addition. Updates `CLAUDE.md` so future agents know where to write. |
-| [`/plan`](commands/plan.md) | Develop a plan in plan-mode-like behaviour, then persist the approved result to `docs/plans/<slug>.md` with frontmatter and back-links. |
-| [`/solution`](commands/solution.md) | Capture or advance a solution doc through `decided` → `in-progress` → `outcome`. One file per piece of work, status tracked in frontmatter. |
-| [`/research`](commands/research.md) | Pull source material from Jira, Confluence, a web URL, a file, or pasted text. Synthesise into structured `### Insight:` blocks under `docs/research/`. |
-| [`/sanitise`](commands/sanitise.md) | Pre-publish gate. Hybrid denylist + LLM scan for client/internal references; auto-fixes known matches, prompts on novel ones. Audit trail to `docs/solutions/`. |
-| [`/design-capture`](commands/design-capture.md) | Read an existing app's frontend, surface design inconsistencies, validate the recommended approach with the user, write `DESIGN.md`. |
-| [`/brainstorm`](commands/brainstorm.md) | Multi-perspective ideation across four fixed lenses (user, ops, scope, risk). Pulls relevant `docs/research/` files first; surfaces tensions explicitly. |
-| [`/triage`](commands/triage.md) | Sweep `todos/`, open PR comments, and (if available) the Jira queue. Categorise, rank by leverage, surface the top three moves. |
-| [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
-| [`/team-init`](commands/team-init.md) | Scaffold a six-persona consultation team (product-strategist, user-advocate, domain-specialist, technical-architect, quality-risk, delivery-lead) into the project, filled from a project-context questionnaire. |
-| [`/consult`](commands/consult.md) | Multi-perspective consultation with the project's persona team — surfaces disagreements, runs targeted rebuttals, synthesises with tensions preserved. |
-| [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance — with an optional independent Codex second opinion (`codex exec`). |
-| [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns — with an optional adversarial Codex outside voice (`codex exec`). |
-
-## Agents shipped
-
-| Agent | What it does |
-|-------|--------------|
-| [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
-| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Pairs well with `/solution` and `/brainstorm` — dispatchable from any skill, or directly from your own review of a long discussion. |
-| [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
-
 ## Install
 
 Clone the repo and run the installer:
@@ -214,6 +145,75 @@ What it does:
 - Reports the version transition (`Update complete: 0.1.0 → 0.2.0 (user scope).`).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each release. The current version is in [VERSION](VERSION).
+
+## The folder convention
+
+Adopt this layout in any project where you want the workshop's discipline:
+
+```
+project/
+├── CLAUDE.md             # agent instructions, preferences, patterns
+├── docs/                 # every artifact lives here, sorted by type
+│   ├── research/         # source material that fuels future work
+│   │   ├── interviews/   # structured customer interview notes
+│   │   └── context/      # product context, market and competitor notes
+│   ├── brainstorms/      # ideation
+│   ├── plans/            # approved plans (post-ExitPlanMode)
+│   ├── solutions/        # solved problems → institutional knowledge
+│   └── changelog.md      # /changelog output
+└── todos/                # triage findings, follow-ups
+```
+
+**The flow.** Research feeds brainstorms. Brainstorms harden into plans. Plans execute into solutions. Solutions get summarised in the changelog. Each layer has its own folder so you (and any skill) know exactly where to look — or where to write.
+
+## Recommended formats
+
+### Customer interviews → `docs/research/interviews/<participant-id>.md`
+
+Long-form interview transcripts get converted (manually, or via [`/research`](commands/research.md)) into a structured AI-friendly format:
+
+````markdown
+---
+participant: Marketing Manager, B2B SaaS
+date: 2026-01-15
+focus: Dashboard usage patterns
+---
+
+## Key Insights
+
+### Insight: Morning dashboard ritual
+**Quote**: "First thing every morning, I check for red flags."
+**Implication**: Dashboard needs to surface problems quickly.
+**Confidence**: 4/5 participants
+````
+
+Why this shape: future skills (synthesis, brainstorming) can scan many interviews and pull structured `### Insight:` blocks without parsing prose. Frontmatter makes filtering by participant or focus area trivial.
+
+## Skills shipped
+
+| Command | What it does |
+|---------|--------------|
+| [`/init-workshop`](commands/init-workshop.md) | Set up the workshop's folder convention in any project, asking before each addition. Updates `CLAUDE.md` so future agents know where to write. |
+| [`/plan`](commands/plan.md) | Develop a plan in plan-mode-like behaviour, then persist the approved result to `docs/plans/<slug>.md` with frontmatter and back-links. |
+| [`/solution`](commands/solution.md) | Capture or advance a solution doc through `decided` → `in-progress` → `outcome`. One file per piece of work, status tracked in frontmatter. |
+| [`/research`](commands/research.md) | Pull source material from Jira, Confluence, a web URL, a file, or pasted text. Synthesise into structured `### Insight:` blocks under `docs/research/`. |
+| [`/sanitise`](commands/sanitise.md) | Pre-publish gate. Hybrid denylist + LLM scan for client/internal references; auto-fixes known matches, prompts on novel ones. Audit trail to `docs/solutions/`. |
+| [`/design-capture`](commands/design-capture.md) | Read an existing app's frontend, surface design inconsistencies, validate the recommended approach with the user, write `DESIGN.md`. |
+| [`/brainstorm`](commands/brainstorm.md) | Multi-perspective ideation across four fixed lenses (user, ops, scope, risk). Pulls relevant `docs/research/` files first; surfaces tensions explicitly. |
+| [`/triage`](commands/triage.md) | Sweep `todos/`, open PR comments, and (if available) the Jira queue. Categorise, rank by leverage, surface the top three moves. |
+| [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
+| [`/team-init`](commands/team-init.md) | Scaffold a six-persona consultation team (product-strategist, user-advocate, domain-specialist, technical-architect, quality-risk, delivery-lead) into the project, filled from a project-context questionnaire. |
+| [`/consult`](commands/consult.md) | Multi-perspective consultation with the project's persona team — surfaces disagreements, runs targeted rebuttals, synthesises with tensions preserved. |
+| [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance — with an optional independent Codex second opinion (`codex exec`). |
+| [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns — with an optional adversarial Codex outside voice (`codex exec`). |
+
+## Agents shipped
+
+| Agent | What it does |
+|-------|--------------|
+| [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
+| [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Pairs well with `/solution` and `/brainstorm` — dispatchable from any skill, or directly from your own review of a long discussion. |
+| [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
 
 ## Roadmap
 
