@@ -23,6 +23,8 @@ This is a markdown skill, not a runtime. Slash commands are prompt expansions, n
 
 When the underlying skills change shape, this orchestrator re-reads the new bodies on next invocation. No re-implementation; the underlying skills stay the single source of truth.
 
+`/auto-fleet` (the fleet sibling) invokes `/auto-do` the same way — reads `commands/auto-do.md` from the same install location and applies these steps with the auto-decision policy below, overriding step 1's slug derivation to use the manifest row's `id` verbatim. `/auto-do` does not need fleet-awareness; the orchestration contract is one-directional.
+
 ## Auto-decision policy
 
 - **Recommended option, when one is marked** → take it.

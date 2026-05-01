@@ -1,5 +1,19 @@
 # TODOs
 
+## Review findings — 2026-05-01 (PR #21, /auto-fleet)
+
+PR #21 (`feat/auto-fleet`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. 5 must-fix items addressed inline; the should-fix and follow-up items below are deferred.
+
+### Should fix
+
+- **`docs/plans/auto-fleet.md` Verification section** — no manual smoke fixture exercises the round-2-must-fix → `halted:round-2-failure` path, which is the most consequential failure mode. Add a sixth fixture: a 2-row manifest where the second subtask is deliberately misconfigured to fail at `/review-pr`'s round 2 gate (e.g. has a known-bad assertion that `pr-reviewer` will flag must-fix on round 1, with a fix-up that introduces a regression Codex catches on round 2). Verify the fleet halts cleanly with `Final status: halted:round-2-failure` and the prior subtask's PR is untouched.
+- **`docs/brainstorms/auto-fleet.md:22, :36`** — brainstorm still uses `done` in row state taxonomy. Round-1 fold-in claimed the rename was applied "across skill body, plan, manifest constraints, state machine, failure modes, and counts" but missed the brainstorm. Either rename in place, or add a one-line "post-decision: state names landed as `succeeded`/`failed`/`skipped`" note at the top of the brainstorm. Brainstorms are pre-decision artefacts so retroactive renaming distorts the record; the post-decision note is probably the cleaner choice.
+
+### Follow-up
+
+- **Manifest fixture pack** (`tests/fixtures/fleet/*.md`) — a small directory of valid + invalid manifest examples for manual smoke validation when changes touch step 2. Catches table-parse regressions. Already on the eng-review TODO list; reaffirmed by Codex round 1.
+- **`docs/plans/auto-fleet.md` engineering-review TODO list** — Codex round 1 noted the plan promises follow-ups will be added to `TODOS.md` "when committed" but the round-1 fix-up commit didn't track them. This commit (round 2 fix-up for PR #21) addresses the point by writing the round-1 review's should-fix and follow-up items here. Remaining eng-review TODOs (rate-limit smoke, push-rejection handling, manifest data-model revisit, first-real-run smoke, gh permission/fork/protected-branch coverage) carry forward — bring them into this file when `/auto-fleet` actually ships.
+
 ## Review findings — 2026-05-01
 
 PR #16 (`feat/browse`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. Must-fix items addressed inline; should-fix and follow-up items captured below.
