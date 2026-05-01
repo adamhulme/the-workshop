@@ -66,31 +66,37 @@ Print this verbatim, then stop:
 ### 2. Resolve the target URL
 
 - If parsed from `$ARGUMENTS`, use it.
-- Otherwise ask: "What URL should I open? (e.g. `http://localhost:3000/dashboard`)". Single `AskUserQuestion` with the user's "Other" option enabling free-text.
-- If the URL is a localhost address, do a quick reachability check via the MCP's navigate-with-timeout (or equivalent). If unreachable, bail: "Dev server unreachable at `<url>`. Start it (e.g. `npm run dev`) and re-run."
+- Otherwise prompt the user inline: "What URL should I open? (e.g. `http://localhost:3000/dashboard`)" — this is free-text input, not a decision gate, so a prose prompt is fine.
+- If the URL is a localhost address, attempt navigation via the MCP with a 5-second timeout. Treat any of these as unreachable: `net::ERR_CONNECTION_REFUSED`, `ERR_CONNECTION_RESET`, navigation timeout exceeded, or the MCP's equivalent connection-error response. On unreachable, bail: "Dev server unreachable at `<url>`. Start it (e.g. `npm run dev`) and re-run."
 - If the URL uses HTTPS with a self-signed certificate, note this — Playwright MCP's `--ignore-https-errors` flag may be needed in the user's config; flag it once and continue.
 
 ### 3. Resolve the scenario
 
 - If parsed from `$ARGUMENTS`, use it.
-- Otherwise ask via `AskUserQuestion`:
-  - "Verify a recent change (driven by `git diff`)"
-  - "Walk a named user flow (paste it via Other)"
-  - "Just observe — no specific scenario"
+- Otherwise dispatch `AskUserQuestion`:
+  - Question: "What's the scenario?"
+  - Header: "Scenario"
+  - Options:
+    - "Verify a recent change (driven by `git diff`)"
+    - "Walk a named user flow (paste via Other)"
+    - "Just observe — no specific scenario"
 - For "verify a recent change": run `git diff --name-only origin/HEAD..HEAD` (or fall back to `git diff HEAD~1..HEAD --name-only`) and surface the modified files, then ask which one's UI to focus on.
 
 ### 4. Load saved storage state (auth)
 
-- If `<repo>/.claude/browse/storage-state.json` exists: assume the user has already configured the MCP to load it via the `--storage-state=<path>` flag (see step 1 setup snippet) and continue. Note in the session log: `storage-state: loaded`.
-- If the file does not exist and the target URL is a known auth-gated host (heuristic: it's not localhost, and the path doesn't include `/login`, `/signin`, `/auth`), prompt once via `AskUserQuestion`:
-  - "No saved storage state. Continue without auth (logged-out experience), or stop and run `/browse --setup` first?"
-  - Options: "Continue without auth" / "Stop, I'll run --setup" *(Recommended)*
+- If `<repo>/.claude/browse/storage-state.json` exists: the file is present, but whether the MCP is *actually* using it depends on whether the user's Claude config started Playwright MCP with `--storage-state=<path>`. The skill cannot introspect MCP startup args. Note in the session log: `storage-state: file present (assumed loaded)`. If step 5 then redirects to a login page on a non-localhost host, the assumption was wrong — see the storage-state-expiry path.
+- If the file does not exist and the target URL is a known auth-gated host (heuristic: it's not localhost, and the path doesn't include `/login`, `/signin`, `/auth`), dispatch `AskUserQuestion`:
+  - Question: "No saved storage state. Continue without auth, or stop and run `/browse --setup` first?"
+  - Header: "No auth"
+  - Options:
+    - "Stop — I'll run `/browse --setup` first" *(Recommended)*
+    - "Continue without auth (logged-out experience)"
 - If localhost or already on a login page: continue silently — this is fine.
 
 ### 5. Drive the session
 
 - Open the URL via the MCP. Wait for `domcontentloaded` (or MCP equivalent).
-- **Detect storage-state expiry.** If the page redirects to a login URL despite `storage-state: loaded`, surface: "Storage state appears expired. Re-run `/browse --setup`." and stop.
+- **Detect storage-state expiry or misconfigured MCP.** If the page redirects to a login URL despite `storage-state: file present (assumed loaded)`, surface: "Storage state appears expired *or* your MCP wasn't started with `--storage-state=.claude/browse/storage-state.json`. Re-run `/browse --setup`, or check your Claude config matches the snippet in step 1." and stop.
 - Capture an initial screenshot (step 0). See **Screenshots** below for the path/naming rule.
 - Walk the scenario. Before each step, narrate one short sentence so the watching user knows what's coming. Examples:
   - "Clicking the *Settings* tab."
@@ -129,7 +135,12 @@ After the session ends:
   - **Reject** if it contains path separators (`/`, `\`), `..` segments, or starts with `/`, `~`, or a Windows drive letter (`C:`). These would write outside `docs/research/`.
   - **Reject** characters illegal on common filesystems: newlines, NUL, `:`, `*`, `?`, `"`, `<`, `>`, `|`, plus Windows reserved names (`CON`, `PRN`, `AUX`, `NUL`, `COM[1-9]`, `LPT[1-9]`).
   - Normalise to kebab-case: lowercase ASCII alphanumerics + hyphens. Replace runs of whitespace/underscores/punctuation with `-`, collapse repeated hyphens, trim leading/trailing hyphens. Truncate to 80 characters.
-  - If normalisation altered the input, show the result and confirm: `Use slug <normalised>? (y / paste alternative)`.
+  - If normalisation altered the input, dispatch `AskUserQuestion`:
+    - Question: "Use slug `<normalised>`?"
+    - Header: "Slug"
+    - Options:
+      - "Use this slug" *(Recommended)*
+      - "I'll paste a different slug (Other)"
 - Confirm target via `AskUserQuestion`: "Save as `docs/research/interviews/<slug>.md`?" with options: "Save" / "Save under a different slug (Other)".
 - On collision with an existing file, ask: overwrite / append timestamped subsection / pick a new slug.
 - `mkdir -p docs/research/interviews` before write.
@@ -141,12 +152,12 @@ Frontmatter (all string values double-quoted; embedded `"` escaped as `\"`):
 ```yaml
 ---
 type: ui-walkthrough
-date: "2026-05-01"
+date: "<today's date in YYYY-MM-DD>"
 target: "<URL>"
 scenario: "<one-line scenario summary>"
 slug: "<slug>"
 status: complete   # or "partial" if user stopped mid-session
-storage_state: "loaded"   # or "none" if no auth was used
+storage_state: "file present (assumed loaded)"   # or "none" if no auth was used
 branch: "<current branch if not main and not detached>"   # omit otherwise
 ---
 ```
@@ -154,7 +165,7 @@ branch: "<current branch if not main and not detached>"   # omit otherwise
 Body:
 
 1. One-paragraph narrative.
-2. `## Observations` — bulleted list, citing screenshot paths inline (e.g. `- Settings tab loaded with 3 panels visible (![](browse-screenshots/02-settings.png))`).
+2. `## Observations` — bulleted list, citing screenshot paths inline. The note lives at `docs/research/interviews/<slug>.md`, so screenshot paths are relative to that directory: `- Settings tab loaded with 3 panels visible (![](<slug>-screenshots/02-settings.png))`.
 3. `## Insights` — the `### Insight:` blocks from step 6.
 4. `## Follow-ups` — bulleted list of suggested next moves with the suggested skill (`/triage`, `/plan <slug>`, `/research`).
 
@@ -175,7 +186,13 @@ Triggered when `$ARGUMENTS` contains `--setup`. Behaviour:
 2. Resolve the login URL from `$ARGUMENTS` (the non-`--setup` token); ask if absent.
 3. `mkdir -p .claude/browse` at the repo root. The directory should be `.gitignore`-d:
    - Read existing `.gitignore`. If `.claude/browse/` is not listed, append it under a new section heading `# /browse — never commit storage state`.
-   - If no `.gitignore` exists, create one with the entry. Confirm via `AskUserQuestion` before creating: some repos use `.git/info/exclude` instead.
+   - If no `.gitignore` exists, dispatch `AskUserQuestion` before creating:
+     - Question: "No `.gitignore` exists. Create one with `.claude/browse/` listed?"
+     - Header: "Gitignore"
+     - Options:
+       - "Create `.gitignore`" *(Recommended)*
+       - "Use `.git/info/exclude` instead"
+       - "Skip — I'll handle it manually"
 4. Confirm the user's Claude config has Playwright MCP started with `--storage-state=.claude/browse/storage-state.json`. If not (heuristic: tell the user we can't introspect their config but the path needs to match), print the snippet from step 1's **No MCP** block, ask the user to update their config, then exit with: "Update `~/.claude.json`, restart Claude Code, then re-run `/browse --setup <url>`."
 5. With config confirmed, drive the headed browser to the login URL via the MCP. Print: "Browser opened. Log in manually. When fully logged in (you can see your authenticated app state), reply with `saved` here."
 6. Wait for the user's `saved` reply. Once received:
