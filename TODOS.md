@@ -1,5 +1,21 @@
 # TODOs
 
+## Review findings — 2026-05-04 (PR #22 round 2, /auto-fleet v1)
+
+Round 2 of `/review-pr` on PR #22. 2 new must-fix items addressed inline (`Dispatch anyway` remote-only branch handling; worktree-management section's stale `.gitignore` reference). 2 should-fix plan-drift items folded inline alongside (plan referenced the pre-fix `gh pr list --head 'auto-do/*'` and the auto-modify-`.gitignore` flow; both updated to match the round-1 fixes). The following should-fix and follow-up items are deferred.
+
+### Should fix
+
+- **`commands/auto-fleet.md:216` multi-token slug regression** — v0.1 normalised whitespace in `$ARGUMENTS` to `-` (so `api logging` became `api-logging`). v1's new parser splits on whitespace and takes the first non-flag token as the slug, rejecting a multi-word input. Backward-compat regression. Fix: take all tokens before the first `--`-prefixed token as the slug (joined, then kebab-case normalised); tokens at/after `--` are flags. *(Codex round 2)*
+- **`commands/auto-fleet.md:222` orphan prompt missing row ids** — Pre-flight surfaces fleet *slugs* parsed from worktree paths but not row *ids*; users can't tell which failed-row worktree they're about to delete. Surface both. *(Codex round 2)*
+- **`commands/auto-fleet.md:292` self-timeout prompt isn't actionable** — Sub-agents don't have a runtime wall-clock primitive. The current "if your wall-clock exceeds 60 min, emit `failed:timeout`" instruction reads as a polite suggestion an LLM-runtime can't reliably honour. Either drop the timeout entirely (own up to "v1 has no timeout") or describe self-policing in honestly soft terms. *(Codex round 2)*
+- **`commands/auto-fleet.md:293` "LAST RESULT wins" still has a hole** — If the agent writes `RESULT:` then quotes the protocol later (in explanatory prose), the quoted echo wins. Fix: require `RESULT:` to be the *final line* of the agent's response, not just last-occurring. *(Codex round 2)*
+- **`docs/plans/auto-fleet-parallel.md:54` Verification 65-min timeout fixture** — Manual smoke list still includes "task that sleeps 65 min → expect `failed:timeout` at the 60-min boundary" — but v1 explicitly doesn't enforce this. Reframe (e.g. "agent self-emits failed:timeout per its prompt") or drop. *(Codex round 2)*
+
+### Follow-up
+
+- **`commands/auto-fleet.md:394` Failure-modes table** — Missing the orphan-cleanup "Cancel" exit row. Add as an `n/a` no-manifest-update exit. *(Codex round 2)*
+
 ## Review findings — 2026-05-04 (PR #22, /auto-fleet v1)
 
 PR #22 (`feat/auto-fleet-parallel`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. 6 must-fix items addressed inline; the following should-fix and follow-up items are deferred.

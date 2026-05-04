@@ -139,7 +139,7 @@ v1 uses one git worktree per dispatched row, isolating each `/auto-do`'s working
 - **Lifetime — `failed` rows**: **preserved on disk** for debugging. The user-facing report at step 9 surfaces the path. The user runs `git worktree remove --force <path>` manually after inspection.
 - **Lifetime — `skipped` rows**: never had a worktree (skipped before dispatch).
 - **Cleanup on crash**: orphan worktrees detected at next `/auto-fleet` invocation (step 1 pre-flight); offered for cleanup via `AskUserQuestion`.
-- **`.claude/auto-fleet/` directory**: pre-flight ensures it's `.gitignore`d (or covered by `.claude/`); appends if not.
+- **`.claude/auto-fleet/` directory**: must be covered by `.gitignore` (typically via `.claude/` itself); pre-flight bails if not, instructing the user to add it on a separate commit before re-invoking. `/auto-fleet` does not auto-modify `.gitignore` (would dirty the tree mid-fleet).
 - **Untracked-runtime-state limitation**: worktrees inherit only tracked files. `.env`, `node_modules`, virtualenvs, build artifacts are NOT carried. v1 ships against the contract "your `/auto-do` runs in a fresh checkout of `<default>`." Tasks requiring local runtime state are not v1-eligible.
 
 ## Scheduler (wave-based, deterministic)
@@ -269,7 +269,7 @@ For each wave until termination:
 
 1. **Compute the ready set.** Rows whose `status == queued` AND every parent's `status` ∈ `{succeeded, skipped}`. Take first up to `--max-parallel` in manifest order.
 
-2. **Per-row idempotency check** (one at a time, in main thread). Run `git branch --list auto-do/<id>` AND `git ls-remote --heads origin auto-do/<id>`. Run `gh pr list --head auto-do/<id> --state all --json number,state,url --jq '.'`. Capture whether the **local** branch exists (`local_exists` ∈ `{true, false}`). If any of branch-local / branch-remote / PR is non-empty, surface via `AskUserQuestion`:
+2. **Per-row idempotency check** (one at a time, in main thread). Run `git branch --list auto-do/<id>` AND `git ls-remote --heads origin auto-do/<id>`. Run `gh pr list --head auto-do/<id> --state all --json number,state,url --jq '.'`. Capture two flags: `local_exists` ∈ `{true, false}` (from `git branch --list`) and `remote_exists` ∈ `{true, false}` (from `git ls-remote --heads`). If any of `local_exists` / `remote_exists` / PR is non-empty, surface via `AskUserQuestion`:
    - **Question**: "Branch `auto-do/<id>` already exists (prior PR: `<state-or-none>`). Skip, dispatch anyway, or cancel?"
    - **Header**: "Idempotency gate"
    - **Options**:
@@ -279,10 +279,11 @@ For each wave until termination:
 
 3. **Sequential worktree + branch creation** (still in main thread, before any sub-agent dispatch). For each row in the wave's surviving selection:
    - `git worktree add --detach .claude/auto-fleet/wt-<slug>-<id> <base-sha>`. If this fails (e.g. another worktree already exists at the path), classify the row as `failed` with `failure_class: infra`, cascade-block its dependents, skip dispatch for this row.
-   - **Branch placement** — depends on whether the local branch already exists (`local_exists` from the idempotency check; for rows that didn't trigger the gate, `local_exists == false`):
-     - **`local_exists == false`**: `git -C <path> checkout -b auto-do/<id>` creates the branch from the just-detached HEAD at `<base-sha>`.
-     - **`local_exists == true`** (only reachable via "Dispatch anyway"): `git -C <path> checkout auto-do/<id>` (no `-b`) checks out the existing branch into the worktree. The branch's tip may differ from `<base-sha>` — that's the user's explicit reuse choice.
-     - On either failure (e.g. branch checkout fails because the branch is checked out in another worktree), classify the row as `failed` with `failure_class: infra`, cascade-block, skip.
+   - **Branch placement** — depends on whether `auto-do/<id>` already exists locally and/or remotely (captured during the idempotency check; for rows that didn't trigger the gate, both flags are `false`):
+     - **Neither local nor remote exists**: `git -C <path> checkout -b auto-do/<id>` creates the branch from the just-detached HEAD at `<base-sha>`.
+     - **Local exists** (regardless of remote — only reachable via "Dispatch anyway"): `git -C <path> checkout auto-do/<id>` checks out the existing local branch into the worktree. Branch tip may differ from `<base-sha>` — user's explicit reuse choice.
+     - **Remote-only exists** (only reachable via "Dispatch anyway" with `local_exists=false && remote_exists=true`): `git fetch origin auto-do/<id>` then `git -C <path> checkout -b auto-do/<id> --track origin/auto-do/<id>`. Tracks the remote branch so subsequent pushes target it; the worktree's HEAD lands at the remote branch's tip, not at `<base-sha>`. This is the "stale remote from a prior crashed run" path the user explicitly chose to resume.
+     - On any failure (branch checked out in another worktree, fetch error, conflicting refs), classify the row as `failed` with `failure_class: infra`, cascade-block, skip.
    - On success, mark the row `running` in memory.
 
 4. **Parallel sub-agent dispatch.** Single message containing K `Agent` tool calls (subagent_type: `general-purpose`). Each agent's prompt:

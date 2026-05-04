@@ -66,9 +66,9 @@ Major changes vs v0.1 are in steps 1 (orphan reconciliation + base SHA pinning),
 
 1. **Pre-flight.** Same as v0.1 plus:
    - Capture `<base-sha> = git rev-parse <default>` once and use this SHA for all worktree creations across the fleet (pinning, not the branch ref).
-   - **Orphan reconciliation.** Run `git worktree list --porcelain` filtered for paths under `.claude/auto-fleet/`. Also run `gh pr list --head 'auto-do/*' --state open --json number,headRefName,url` to surface in-flight PRs from prior crashed fleets. If either is non-empty, surface via `AskUserQuestion`: "N orphan worktrees and M open PRs from prior /auto-fleet runs detected. Clean up worktrees before continuing? (PRs are left untouched — review/close manually.)" with options "Clean up worktrees *(Recommended)*" / "Continue with orphans" / "Cancel".
+   - **Orphan reconciliation.** Run `git worktree list --porcelain` filtered for paths under `.claude/auto-fleet/`. Run `gh pr list --state open --json number,headRefName,url --jq '[.[] | select(.headRefName | startswith("auto-do/"))]'` to surface in-flight PRs from prior crashed fleets (literal `--head` filter doesn't pattern-match in `gh`; post-filter via jq is the correct approach — round-2 fix on PR #22). If either is non-empty, surface via `AskUserQuestion` with options "Clean up worktrees *(Recommended only if no failed-row debugging is in progress)*" / "Continue with orphans *(Recommended if any orphan path matches a fleet whose manifest has `failed` rows)*" / "Cancel".
    - Capture `--max-parallel=N` from `$ARGUMENTS` (default 3, ceiling 5; reject if outside `[1, 5]`).
-   - Confirm `.claude/auto-fleet/` is in `.gitignore` (or the parent `.claude/` is). If not, append it. Bail if the user has a tracked `.claude/auto-fleet/` directory (unusual; protects against accidentally committing worktree contents).
+   - Confirm `.claude/auto-fleet/` is covered by `.gitignore` (typically via `.claude/`). If NOT covered, **bail** at step 1 with instructions to add it on a separate commit before re-invoking. `/auto-fleet` does not auto-modify `.gitignore` mid-fleet because that would dirty the working tree and break step 8's manifest commit (round-1 fix on PR #22). Also bail if a tracked `.claude/auto-fleet/` directory already exists.
 
 2. **Read + validate the manifest.** Same as v0.1 plus:
    - **Header row** must enumerate exactly: `id`, `description`, `status`, `branch`, `pr` (in v0.1 order) OR `id`, `description`, `status`, `depends_on`, `branch`, `pr` (with depends_on inserted). Backward-compatible: if `depends_on` column is missing, treat all rows as having empty deps.
@@ -207,7 +207,7 @@ This example exercises every v1 feature with **code-independent** rows: three in
 - **Cleanup on succeeded**: `git worktree remove --force <path>` then `rm -rf <path>`.
 - **Cleanup on failed**: explicit user action (skill body's user-facing report shows the path).
 - **Cleanup on crash**: orphan worktrees detected at next `/auto-fleet` invocation (step 1 pre-flight).
-- **`.claude/auto-fleet/` directory**: auto-added to `.gitignore` if not already covered.
+- **`.claude/auto-fleet/` directory**: must be covered by `.gitignore` (typically via `.claude/` itself); pre-flight bails if not, instructing the user to add it on a separate commit. No auto-modify (would dirty the tree mid-fleet).
 - **Untracked-runtime-state limitation**: worktrees inherit only tracked files. `.env` / `node_modules` / virtualenvs / build artifacts are NOT copied. Documented v1 limitation.
 
 ## Scheduler (wave-based, deterministic)
