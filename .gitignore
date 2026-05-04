@@ -1,0 +1,4 @@
+# Local Claude Code state — settings, agent worktrees, scheduled-task locks.
+# Project-scoped agents and commands belong under .claude/{commands,agents}/
+# but those are installed by install.sh into ~/.claude/, not committed here.
+.claude/

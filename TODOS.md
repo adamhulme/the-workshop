@@ -1,5 +1,20 @@
 # TODOs
 
+## Eng-review carry-forwards — 2026-05-04 (/auto-fleet v1, PR feat/auto-fleet-parallel)
+
+The Codex outside-voice review on the v1 plan returned 19 findings; 17 were folded into `docs/plans/auto-fleet-parallel.md` and `commands/auto-fleet.md`. The following 4 deferrals + 1 disagreement carry forward:
+
+### Deferred (v1.5+ unless real usage shows otherwise)
+
+- **Concurrent-fleet protection (lock file).** Codex #14 — `.claude/auto-fleet/lock` file would prevent two `/auto-fleet` invocations colliding on worktrees / branches. v1 documents the limitation. Add when real users hit it.
+- **Mid-fleet manifest hash recovery.** Codex #16 — when the hash check fires at step 8 after PRs are created, v1 refuses to clobber and exits; user reconciles manually. Real recovery (e.g. amend in-memory state into the user's edits) is v1.5+.
+- **Untracked-runtime-state into worktrees.** v1 contract: tasks must be runnable in a fresh checkout. Copy/symlink `.env` / `node_modules` / virtualenvs into worktrees would broaden the kinds of tasks `/auto-fleet` v1 supports. Real but big lift.
+- **`/auto-fleet` v1 first-real-run smoke** — like v0.1's analogous TODO, schedule a one-off agent ~2 weeks after ship to run a 4-row DAG fleet against a public template repo and report findings.
+
+### Disagreed (workshop principle)
+
+- **Codex #20 — "Markdown-only is the wrong constraint for this much scheduler logic."** Same foundational disagreement as v0.1. The LLM is the runtime; the markdown is the program. v1 is more complex than v0.1 under the same substrate. Acknowledged in the plan's Constraints section. Not an action item; a known tension.
+
 ## Review findings — 2026-05-01 (PR #21, /auto-fleet)
 
 PR #21 (`feat/auto-fleet`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. 5 must-fix items addressed inline; the should-fix and follow-up items below are deferred.
