@@ -5,6 +5,8 @@ task: Ship /auto-fleet v0.1 — a serial dispatcher that reads a user-authored m
 branch: chore/auto-do-outcome
 ---
 
+> **v1 supersedes parts of this plan.** `/auto-fleet` v1 (parallel + deps) was planned at [`docs/plans/auto-fleet-parallel.md`](./auto-fleet-parallel.md) and ships in PR feat/auto-fleet-parallel. v1 is backward-compatible — manifests authored under v0.1's schema still run, just under v1's wave-based scheduler. The v0.1 plan and its eng-review block are preserved below as decision history.
+
 ## Goal
 
 Ship `/auto-fleet` v0.1 — a serial dispatcher that reads a user-authored fleet manifest and runs `/auto-do` per subtask. Persists state in the manifest itself. Not a planner, not a parallelism engine, never auto-merging. **Halts on first failure** in v0.1 (no productive-mode flag).
