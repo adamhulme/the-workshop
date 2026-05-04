@@ -210,16 +210,19 @@ Diamond deps (A → B,C → D, A fails) → D `blocked` once with `blocked_by: A
 - Detect default branch: `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` (fallback `main`). Store as `<default>`.
 - **Pin `<base-sha> = git rev-parse <default>`.** All worktrees in this fleet's lifetime use this SHA. Protects against `<default>` advancing mid-fleet.
 - Verify `gh` version supports `gh pr ready --undo` (transitively, via `/auto-do`'s round-2 safe-stop).
-- **Derive `<slug>` from `$ARGUMENTS`** using kebab-case validation (lowercase, replace whitespace/punctuation with `-`, collapse repeated hyphens, trim, reject path separators / illegal filename chars). Cap at 50 chars. All later steps refer to `<slug>` by this derived value.
+- **Parse `$ARGUMENTS` into `<slug>` + flags before any normalisation.** Split on whitespace. The first non-flag token is `<slug>` (raw, before kebab-case normalisation); subsequent tokens matching `--max-parallel=<int>` are flags. Reject any other token with: `"unrecognised argument '<token>'; expected <slug> [--max-parallel=N]"`.
+- **Derive `<slug>`** from the captured slug token using kebab-case validation (lowercase, replace whitespace/punctuation with `-`, collapse repeated hyphens, trim, reject path separators / illegal filename chars). Cap at 50 chars. All later steps refer to `<slug>` by this derived value.
 - **Refuse to run on the default branch.** Bail unless current branch == `fleet/<slug>` (using derived slug).
 - **Verify the fleet branch is rooted on `<default>` and contains only manifest commits.** Run `git diff <default>..HEAD --name-only`. The set of changed paths must be empty or exactly `{docs/fleet/<slug>.md}`. Bail otherwise.
-- **Capture `--max-parallel=N` from `$ARGUMENTS`.** Default `N = 3`. Reject if outside `[1, 5]`.
-- **Ensure `.claude/auto-fleet/` is gitignored.** If `.claude/` is already in `.gitignore`, it's covered. Otherwise append `.claude/auto-fleet/` to `.gitignore`. Bail if a tracked `.claude/auto-fleet/` directory already exists (very unusual; protects against committing worktree contents).
-- **Orphan reconciliation.** Run `git worktree list --porcelain` filtered for paths under `.claude/auto-fleet/`. Run `gh pr list --head 'auto-do/*' --state open --json number,headRefName,url`. If either is non-empty, surface via `AskUserQuestion`:
-  - **Question**: "Detected N orphan worktrees and M open `auto-do/*` PRs from prior runs. Clean up worktrees before continuing? (PRs are NOT auto-closed — review/close them manually.)"
+- **Capture `--max-parallel=N`.** Default `N = 3`. Reject if N is non-integer or outside `[1, 5]` with: `"--max-parallel must be an integer in [1, 5]; got <value>"`.
+- **Verify `.claude/auto-fleet/` is gitignored.** If `.claude/` is already in `.gitignore`, it's covered. Otherwise bail with: `"add .claude/auto-fleet/ to .gitignore (and commit on a separate change first); /auto-fleet won't auto-modify .gitignore mid-fleet because that would dirty the working tree and break step 8's manifest commit."` Also bail if a tracked `.claude/auto-fleet/` directory already exists.
+- **Orphan reconciliation.** Run `git worktree list --porcelain` filtered for paths under `.claude/auto-fleet/`. Run `gh pr list --state open --json number,headRefName,url --jq '[.[] | select(.headRefName | startswith("auto-do/"))]'` (literal `--head` matching does NOT pattern-match in `gh`; the post-filter via `jq` is the correct approach). If either is non-empty, surface via `AskUserQuestion`:
+  - **Question**: "Detected N orphan worktrees (from fleets: `<slugs-parsed-from-paths>`) and M open `auto-do/*` PRs from prior runs. Clean up worktrees before continuing? (PRs are NOT auto-closed — review/close them manually.)"
   - **Header**: "Orphan cleanup"
-  - **Options**: "Clean up worktrees *(Recommended)*" / "Continue with orphans" / "Cancel".
-  - On Clean up: `git worktree remove --force <path>` for each orphan; `rm -rf <path>`; report what was removed.
+  - **Options**:
+    - "Clean up worktrees *(Recommended only if no failed-row debugging is in progress)*" — `git worktree remove --force <path>` for each orphan, then report.
+    - "Continue with orphans *(Recommended if any orphan path matches a fleet whose manifest has `failed` rows)*" — leave worktrees in place; preserves debugging state from prior `failed` rows.
+    - "Cancel" — exit; user investigates manually.
 - Confirm `docs/fleet/<slug>.md` exists in the working tree. If missing, bail with manual-author instructions.
 
 ### 2. Read + validate the manifest
@@ -244,6 +247,8 @@ Diamond deps (A → B,C → D, A fails) → D `blocked` once with `blocked_by: A
 ### 3. Resumability check
 
 - If any row has `status == running`, bail without modifying anything: "<N> rows are stuck in `running` state from a prior run or external edit. Edit `docs/fleet/<slug>.md` manually to reset them to `queued` (or mark `failed`/`skipped`), then re-invoke. v1 does not auto-reset."
+- If any row has `status == failed` or `status == blocked`, bail with: "<N> rows are in terminal failure states (`failed`/`blocked`) on disk. v1 does not re-dispatch terminal-state rows mid-fleet. Edit `docs/fleet/<slug>.md` manually to reset them to `queued` (to retry) or `skipped` (to skip and proceed), then re-invoke. (If you re-author and want cascade-block semantics on fresh failures, reset to `queued` — the dispatch loop will produce the cascade naturally.)"
+- Pre-existing `succeeded` and `skipped` rows are accepted as already-done; they unblock dependents per the scheduler's normal logic.
 
 ### 4. Confirmation gate
 
@@ -264,17 +269,20 @@ For each wave until termination:
 
 1. **Compute the ready set.** Rows whose `status == queued` AND every parent's `status` ∈ `{succeeded, skipped}`. Take first up to `--max-parallel` in manifest order.
 
-2. **Per-row idempotency check** (one at a time, in main thread). Run `git branch --list auto-do/<id>` AND `git ls-remote --heads origin auto-do/<id>`. Run `gh pr list --head auto-do/<id> --state all --json number,state,url --jq '.'`. If any non-empty, surface via `AskUserQuestion`:
+2. **Per-row idempotency check** (one at a time, in main thread). Run `git branch --list auto-do/<id>` AND `git ls-remote --heads origin auto-do/<id>`. Run `gh pr list --head auto-do/<id> --state all --json number,state,url --jq '.'`. Capture whether the **local** branch exists (`local_exists` ∈ `{true, false}`). If any of branch-local / branch-remote / PR is non-empty, surface via `AskUserQuestion`:
    - **Question**: "Branch `auto-do/<id>` already exists (prior PR: `<state-or-none>`). Skip, dispatch anyway, or cancel?"
    - **Header**: "Idempotency gate"
    - **Options**:
      - "Skip *(Recommended)*" — mark row `skipped` in memory, capture prior `pr` URL if any, remove from this wave's selection.
-     - "Dispatch anyway" — proceed; existing branch will be reused (`/auto-do`'s `rev-list 0 → reuse it` logic).
+     - "Dispatch anyway" — proceed; the existing branch will be reused (`/auto-do`'s `rev-list 0 → reuse it` logic). Step 6.3 below handles branch reuse vs creation per `local_exists`.
      - "Cancel" — set `Final status: halted:branch-collision-cancel`, break out of scheduler, jump to step 8.
 
 3. **Sequential worktree + branch creation** (still in main thread, before any sub-agent dispatch). For each row in the wave's surviving selection:
    - `git worktree add --detach .claude/auto-fleet/wt-<slug>-<id> <base-sha>`. If this fails (e.g. another worktree already exists at the path), classify the row as `failed` with `failure_class: infra`, cascade-block its dependents, skip dispatch for this row.
-   - `git -C .claude/auto-fleet/wt-<slug>-<id> checkout -b auto-do/<id>`. Same failure handling.
+   - **Branch placement** — depends on whether the local branch already exists (`local_exists` from the idempotency check; for rows that didn't trigger the gate, `local_exists == false`):
+     - **`local_exists == false`**: `git -C <path> checkout -b auto-do/<id>` creates the branch from the just-detached HEAD at `<base-sha>`.
+     - **`local_exists == true`** (only reachable via "Dispatch anyway"): `git -C <path> checkout auto-do/<id>` (no `-b`) checks out the existing branch into the worktree. The branch's tip may differ from `<base-sha>` — that's the user's explicit reuse choice.
+     - On either failure (e.g. branch checkout fails because the branch is checked out in another worktree), classify the row as `failed` with `failure_class: infra`, cascade-block, skip.
    - On success, mark the row `running` in memory.
 
 4. **Parallel sub-agent dispatch.** Single message containing K `Agent` tool calls (subagent_type: `general-purpose`). Each agent's prompt:
@@ -283,15 +291,15 @@ For each wave until termination:
    - Task: read `commands/auto-do.md` from `.claude/commands/auto-do.md` (project) then `~/.claude/commands/auto-do.md` (user). Execute its numbered steps inline with its auto-decision policy.
    - Slug override: skip `/auto-do` step 1's slug-derivation and collision-suffix logic. Use `<id>` as the slug verbatim. The branch is already created.
    - Argument: `<description>` from this row passed as `$ARGUMENTS` to `/auto-do`.
-   - **Per-row timeout: 60 minutes.** Agent must produce its final response within 60 min wall-clock. If it doesn't, main thread classifies the row as `failed:timeout` with `failure_class: infra`.
-   - **RESULT-line protocol.** The agent's last text response MUST include exactly one line of the form: `RESULT: status=<token> branch=<auto-do/<id>> pr=<url-or-empty>`. The `<token>` is `/auto-do`'s `Final status:` line value verbatim. Missing or unparseable RESULT line → main thread classifies the row as `failed` with `failure_class: protocol-violation`.
+   - **Per-row timeout: best-effort, not enforced by the runtime.** Agent tool calls have no caller-side timeout primitive in v1's runtime; main thread cannot strictly cap a hung sub-agent. Each agent's prompt SHOULD include "if your wall-clock exceeds 60 min, emit `RESULT: status=failed:timeout branch=auto-do/<id> pr=` and exit" so a self-aware sub-agent self-classifies. A genuinely runaway sub-agent will block the wave indefinitely; the user must cancel manually (Esc / Ctrl-C). Documented v1 limitation; runtime-enforced timeout is a v1.5+ feature.
+   - **RESULT-line protocol.** The agent's last text response MUST include at least one line of the form: `RESULT: status=<token> branch=<auto-do/<id>> pr=<url-or-empty>`. The `<token>` is `/auto-do`'s `Final status:` line value verbatim. **If multiple `RESULT:` lines appear, the LAST one wins** (LLM sub-agents may echo the protocol while explaining what they're going to do; only the final emission counts). Missing `RESULT:` line entirely or unparseable last RESULT line → main thread classifies the row as `failed` with `failure_class: protocol-violation`.
 
-5. **Wait for all K sub-agents to complete.** Main thread blocks until every agent returns. (Sub-agent timeouts are handled by classifying that agent's row as `failed:timeout` and continuing.)
+5. **Wait for all K sub-agents to complete.** Main thread blocks until every agent returns. Self-classified `failed:timeout` rows (per the 60-min self-policing prompt above) come back through the same RESULT line as any other terminal status; runaway sub-agents that don't self-classify will block the wave indefinitely and require manual cancellation. v1 limitation.
 
 6. **Per-row outcome classification** (parse each agent's RESULT line):
    - `status=success` → row state `succeeded`. Capture branch + PR URL.
    - `status=failed:round-2-must-fix` | `failed:test-gate` | `failed:complexity-smell` | `failed:ambiguity` → row `failed`; `failure_class: task`.
-   - Sub-agent timeout (60 min) → row `failed`; `failure_class: infra`; status token `failed:timeout` synthesised.
+   - Self-classified `status=failed:timeout` (sub-agent hit its 60-min self-policing limit) → row `failed`; `failure_class: infra`.
    - Worktree/branch create error during step 6.3 → row `failed`; `failure_class: infra`.
    - Anything else, RESULT line missing, or unparseable → row `failed`; `failure_class: protocol-violation`. Capture first 200 chars of the agent's response into the row's annotation (surfaced at step 8).
 
@@ -362,11 +370,13 @@ Print:
 | Manifest frontmatter `slug` mismatch | Bail at step 2 | n/a |
 | > 10 queued rows | Bail at step 2 | n/a |
 | Stuck `running` rows on disk | Bail at step 3 | n/a |
+| Pre-existing `failed` or `blocked` rows on disk | Bail at step 3 (manual reset to `queued` or `skipped`) | n/a |
 | User cancels at confirmation gate | Halt; continue to step 8 | `halted:user-cancel` |
 | Branch collision, user cancels | Halt; continue to step 8 | `halted:branch-collision-cancel` |
 | Worktree-create fails for a row | Row `failed` (failure_class: infra); cascade-block dependents; continue | scheduler runs to termination |
 | Branch-create fails for a row | Row `failed` (failure_class: infra); cascade-block dependents; continue | scheduler runs to termination |
-| Sub-agent times out (60 min) | Row `failed:timeout` (failure_class: infra); cascade-block dependents; continue | scheduler runs to termination |
+| Sub-agent self-reports `failed:timeout` (60-min self-policing) | Row `failed:timeout` (failure_class: infra); cascade-block dependents; continue | scheduler runs to termination |
+| Sub-agent runs away without self-reporting | Wave blocks indefinitely; user cancels manually (v1 limitation) | n/a |
 | Sub-agent RESULT line missing/unparseable | Row `failed` (failure_class: protocol-violation); cascade-block dependents; continue | scheduler runs to termination |
 | Subtask round-2 must-fix | Row `failed` (failure_class: task); cascade-block dependents; continue | scheduler runs to termination |
 | Subtask test gate | Row `failed` (failure_class: task); cascade-block dependents; continue | scheduler runs to termination |
@@ -389,7 +399,7 @@ Print:
 - No incremental scheduling (slot-frees-dispatch-next vs wave-based) (v1.5+).
 - No dispatch-staggering (wave dispatches all rows at once; rate-limit failures become row-level `failure_class: infra`).
 - No concurrent-fleet protection (no lock file). Behaviour undefined if two `/auto-fleet` invocations run in parallel.
-- Per-row timeout hardcoded at 60 min (no flag).
+- Per-row timeout is **self-policing only** in v1: each sub-agent's prompt instructs it to self-emit `failed:timeout` after 60 min wall-clock. The runtime cannot enforce this from main thread (Agent tool calls have no caller-side timeout primitive); a runaway sub-agent that ignores the self-policing instruction will block the wave until the user cancels manually. Runtime-enforced per-row timeout is a v1.5+ feature.
 - **Untracked runtime state** (`.env`, `node_modules`, virtualenvs, build artifacts) is NOT carried into worktrees. v1 only suits `/auto-do` tasks runnable in a fresh checkout.
 - Manifest is markdown-table-with-frontmatter; mainstream fleet runners use YAML/JSON. Documented limitation.
 - Single-writer manifest at step 8; mid-run hash-tamper detection has no recovery path beyond "refuse to clobber and exit."

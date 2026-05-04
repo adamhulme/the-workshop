@@ -1,5 +1,28 @@
 # TODOs
 
+## Review findings — 2026-05-04 (PR #22, /auto-fleet v1)
+
+PR #22 (`feat/auto-fleet-parallel`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. 6 must-fix items addressed inline; the following should-fix and follow-up items are deferred.
+
+### Should fix
+
+- **`commands/auto-fleet.md` v0.1 backward-compat semantics drift** — v0.1-schema manifests run under v1 as parallel-with-no-deps, which diverges from v0.1's serial halt-on-first semantics. Document the behavioural drift explicitly in the backward-compat note; suggest `--max-parallel=1` + explicit `depends_on` chains for v0.1-equivalent semantics. *(Codex)*
+- **`commands/auto-fleet.md:250` `<min-waves>` ignores `--max-parallel`** — DAG depth alone gives wrong estimates when `N > max_parallel` at any level. With 10 independent rows + `--max-parallel=3`, depth=1 but actual waves=4. Compute as `max(DAG-depth, ceil(level-width / max-parallel) summed across levels)`, or document the caveat in the prompt. *(flagged by both)*
+- **`commands/auto-fleet.md` outcome classification — parseable RESULT with unknown status** — Currently classifies as `protocol-violation`, conflating "RESULT line exists but `/auto-do` reported a status the matcher doesn't enumerate" with "RESULT line missing/malformed." Introduce `failure_class: unknown-status` as a distinct class so a real new `/auto-do` failure-status surfaces clearly. *(Codex)*
+- **`commands/auto-fleet.md` cascade-block `blocked_by` precision** — Always set to the originally-failed root, hiding intermediate ancestors. In a chain A→B→C with A failing, C ends up `blocked_by=A` even though C's `depends_on` is `[B]`. The user-facing report's "C blocked because A failed" doesn't match C's manifest. Fix: track the immediate unsatisfied parent in BFS, or rename to `cascade_root_id` and have the report walk the actual edge. *(pr-reviewer)*
+- **`CHANGELOG.md:23` duplicate v0.1+v1 entries** — Both `/auto-fleet` entries land under `[Unreleased]`. v1 supersedes v0.1; the v0.1 bullet duplicates information already in the v1 entry's "replacing v0.1's serial loop" + plan-doc references. Drop the v0.1 entry. *(pr-reviewer)*
+- **`docs/solutions/auto-fleet-parallel.md` frontmatter still `decided`** — Per `CLAUDE.md`'s solution convention, a PR that ships the implementation should advance the doc to `in-progress` (or `outcome` if this PR is considered the shipping commit). Currently still `decided`. *(pr-reviewer)*
+- **`docs/plans/auto-fleet-parallel.md` Verification — no committed fixture pack** — v1 introduces non-trivial parser surface (cycle detection, forward-ref check, schema-variant detection, id regex, 6-state enum) but ships zero committed fixtures. Stub at minimum the cycle and forward-ref-miss fixtures into the repo (e.g. `docs/research/fixtures/auto-fleet/`). *(flagged by both)*
+
+### Follow-up
+
+- **`commands/auto-fleet.md` `failed:ambiguity` classified as `failure_class: task`** — Defensible simplification, but conflates LLM-decision-ambiguity with code-quality failures. The user's response shape differs (re-author task description vs fix-and-retry). Worth a separate `failure_class: ambiguity` later. *(pr-reviewer)*
+- **`commands/auto-fleet.md` worktree teardown** — `git worktree remove --force` already deletes the working dir; the trailing `rm -rf` is redundant. Drop or document defensive intent. *(pr-reviewer)*
+- **`commands/auto-fleet.md` scheduler pseudocode** — `<base_sha>` (underscore) inconsistent with `<base-sha>` (hyphen) used elsewhere. Cosmetic. *(pr-reviewer)*
+- **`commands/auto-fleet.md:472` `### 7. (No standalone step 7.)` placeholder** — Section header that says "no section." Renumber 8→7 and 9→8 (and update internal cross-references), or drop the placeholder. *(pr-reviewer)*
+- **`docs/plans/auto-fleet-parallel.md` Manifest format alignment** — `changelog` row's `depends_on` cell visibly overflows its column header in source; mirror the skill body's column widths. *(pr-reviewer)*
+- **`CHANGELOG.md:23` review-count math** — Says "19 findings; 17 folded, 2 → TODOs, 1 disagreed" which sums to 20. Counting error in the v1-entry prose. *(Codex)*
+
 ## Eng-review carry-forwards — 2026-05-04 (/auto-fleet v1, PR feat/auto-fleet-parallel)
 
 The Codex outside-voice review on the v1 plan returned 19 findings; 17 were folded into `docs/plans/auto-fleet-parallel.md` and `commands/auto-fleet.md`. The following 4 deferrals + 1 disagreement carry forward:
