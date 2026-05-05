@@ -14,6 +14,21 @@ PR #21 (`feat/auto-fleet`). Round 1 review by Codex CLI + `pr-reviewer` agent in
 - **Manifest fixture pack** (`tests/fixtures/fleet/*.md`) — a small directory of valid + invalid manifest examples for manual smoke validation when changes touch step 2. Catches table-parse regressions. Already on the eng-review TODO list; reaffirmed by Codex round 1.
 - **`docs/plans/auto-fleet.md` engineering-review TODO list** — Codex round 1 noted the plan promises follow-ups will be added to `TODOS.md` "when committed" but the round-1 fix-up commit didn't track them. This commit (round 2 fix-up for PR #21) addresses the point by writing the round-1 review's should-fix and follow-up items here. Remaining eng-review TODOs (rate-limit smoke, push-rejection handling, manifest data-model revisit, first-real-run smoke, gh permission/fork/protected-branch coverage) carry forward — bring them into this file when `/auto-fleet` actually ships.
 
+## Review findings — 2026-05-05 (PR #23, playwright-cli switch)
+
+PR #23 (`feat/browse-playwright-cli`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. Must-fix item (step 2/4 navigation ordering) addressed inline; should-fix and follow-up items below.
+
+### Should fix
+
+- **`commands/browse.md:210`** — Degradation table claimed storage-expiry detection existed in step 5 but step 5 had no such logic. Fixed alongside the must-fix ordering item, but verify the detection heuristic is robust.
+- **`README.md:39,109`** — Still references "Playwright MCP (or Chrome DevTools MCP)" as the optional integration for `/browse`. Should reference `playwright-cli` / `@playwright/cli`.
+- **`docs/changelog.md:20-24`** — Still describes `/browse` as orchestrating "Playwright MCP (primary) or Chrome DevTools MCP (alternative)". Update or add a new entry for the playwright-cli switch.
+
+### Follow-up
+
+- **`TODOS.md`** — Several earlier TODO items (lines 26-28, 33-35) reference MCP-specific concerns (MCP save tool, capability-check tool names, MCP config introspection, README storageState wording) that are now moot after the playwright-cli switch. Sweep and close.
+- **`commands/browse.md`** — No smoke test for the CLI auth flow (state-load → goto → expiry detection). A basic manual transcript would catch ordering regressions.
+
 ## Review findings — 2026-05-01
 
 PR #16 (`feat/browse`). Round 1 review by Codex CLI + `pr-reviewer` agent in parallel. Must-fix items addressed inline; should-fix and follow-up items captured below.
