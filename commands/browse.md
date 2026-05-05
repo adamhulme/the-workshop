@@ -1,11 +1,11 @@
 ---
-description: Drive a visible browser via an MCP server so the user can watch Claude verify changes or observe the app, capture the session as a research note. First-run --setup persists login state for reuse.
+description: Drive a visible browser via playwright-cli so the user can watch Claude verify changes or observe the app, capture the session as a research note. First-run --setup persists login state for reuse.
 argument-hint: [--setup] [url] [scenario]
 ---
 
-Orchestrate an existing browser MCP (Playwright MCP recommended; Chrome DevTools MCP an alternative) to drive a *visible* browser. Sessions land at `docs/research/interviews/<slug>.md` with screenshots alongside.
+Drive a *visible* browser using `playwright-cli` (the token-efficient CLI companion to Playwright MCP). Snapshots and screenshots go to disk — not the context window — keeping token usage ~4x lower than the MCP server approach. Sessions land at `docs/research/interviews/<slug>.md` with screenshots alongside.
 
-`/browse --setup` is the one-shot credential flow: log in once via the headed browser, the resulting Playwright `storageState` is persisted, every subsequent `/browse` reuses it. Claude never types or sees the user's password — the user logs in manually in the browser. The persisted storage state (cookies + localStorage = session credentials) lives at `<repo>/.claude/browse/storage-state.json`, which the skill auto-`.gitignore`s, so it stays on the user's machine and never lands in version control.
+`/browse --setup` is the one-shot credential flow: log in once via the headed browser, the resulting storage state is persisted, every subsequent `/browse` reuses it. Claude never types or sees the user's password — the user logs in manually in the browser. The persisted storage state (cookies + localStorage = session credentials) lives at `<repo>/.claude/browse/storage-state.json`, which the skill auto-`.gitignore`s, so it stays on the user's machine and never lands in version control.
 
 User arguments: $ARGUMENTS
 
@@ -18,57 +18,53 @@ User arguments: $ARGUMENTS
 
 ## Hard rules
 
-- **Headed mode only.** This skill is for the user to *watch*. If the active MCP cannot show a window (WSL with no DISPLAY, headless container, remote SSH without X-forwarding), bail with: "/browse needs a headed browser the user can see. Configure Playwright MCP with `--headed`, or run from a desktop session."
+- **Headed mode only.** This skill is for the user to *watch*. Always pass `--headed` to `playwright-cli` commands that launch a browser. If the environment cannot show a window (WSL with no DISPLAY, headless container, remote SSH without X-forwarding), bail with: "/browse needs a headed browser the user can see. Run from a desktop session."
 - **Read-only by default.** Navigation, clicks on visibly-safe elements (links, tabs, accordions), typing into search boxes — all fine without confirmation. Form submissions, deletes, payments, anything POST-shaped, anything that mutates remote state — pause and confirm via `AskUserQuestion` per action.
 - **Never log in for the user.** Setup mode opens the page; the user types the credentials. Claude does not see, request, or store passwords.
 - **Stop on user say-so.** Reply with "stop", "done", or "save" inline to end the session — partial sessions still write a note marked `status: partial`. A hard cancel (`Ctrl+C`) kills the command before the write can happen, so no note lands; that's a fundamental limitation of slash-command execution and is documented in the degradations.
 - **Never run dev servers.** If localhost is unreachable, bail — don't start `npm run dev` or equivalent.
+
+## How playwright-cli is invoked
+
+All browser interaction happens via Bash calls to `playwright-cli`. Key patterns:
+
+- **Launch & navigate:** `playwright-cli open <url> --headed` (opens browser and navigates).
+- **Navigate:** `playwright-cli goto <url>` (within an open session).
+- **Understand the page:** `playwright-cli snapshot` — returns a text snapshot with element refs (e.g. `e15`). Read the snapshot file to understand page structure before acting. Snapshots stay on disk; only read them when you need to pick a target element.
+- **Click:** `playwright-cli click <ref>` where `<ref>` is an element ref from a snapshot (e.g. `e15`), a CSS selector (`"#main > button"`), or a role selector (`"role=button[name=Submit]"`).
+- **Type:** `playwright-cli type <text>` (into the focused editable element) or `playwright-cli fill <ref> <text>` (target a specific field).
+- **Screenshot:** `playwright-cli screenshot --filename=<path>` — saves to disk. Never enters the context window.
+- **Element screenshot:** `playwright-cli screenshot <ref> --filename=<path>`.
+- **Key press:** `playwright-cli press <key>` (e.g. `Enter`, `Tab`, `ArrowDown`).
+- **Tabs:** `playwright-cli tab-list`, `playwright-cli tab-new [url]`, `playwright-cli tab-select <index>`.
+- **Storage state:** `playwright-cli state-save <filename>`, `playwright-cli state-load <filename>`.
+
+**Token discipline:** prefer `snapshot` over `screenshot` for understanding page structure — snapshots are text and cheaper to read. Only capture screenshots for the research note or when visual verification matters. When reading a snapshot, read only the portion you need.
 
 ## Steps
 
 ### 1. Pre-flight
 
 - `git rev-parse --show-toplevel` — must be in a git repo. If not: bail with "/browse needs a git repo to anchor the research note. Run from inside one."
-- Detect a browser MCP in the active toolset:
-  - Look for tools matching `mcp__playwright__*` (Playwright MCP).
-  - Or `mcp__chrome-devtools__*` / `mcp__chrome_devtools__*` (Chrome DevTools MCP).
-  - If neither is found, print the **No MCP** block (below) and exit.
-- Verify the MCP exposes the four required capabilities: navigate, click, type, screenshot. (Tool names vary by MCP — match by purpose, not exact name.) If a capability is missing, bail with: "MCP `<name>` is loaded but does not expose `<capability>`. Install full Playwright MCP (`npx @playwright/mcp@latest`) or upgrade your existing MCP."
+- Check that `playwright-cli` is available: run `playwright-cli --version`. If the command is not found, print the **No CLI** block (below) and exit.
 
-#### No MCP block
+#### No CLI block
 
 Print this verbatim, then stop:
 
-> No browser MCP detected. To use `/browse`, install Playwright MCP and add it to your Claude config.
+> `playwright-cli` not found. To use `/browse`, install it:
 >
-> 1. Install: `npx @playwright/mcp@latest --version` (Node 18+ required).
-> 2. Add to `~/.claude.json` (or your active Claude config) under `mcpServers`:
-> ```json
-> {
->   "mcpServers": {
->     "playwright": {
->       "command": "npx",
->       "args": [
->         "-y",
->         "@playwright/mcp@latest",
->         "--headed",
->         "--storage-state=.claude/browse/storage-state.json"
->       ]
->     }
->   }
-> }
 > ```
-> 3. Restart Claude Code.
-> 4. Re-run `/browse --setup <login-url>` to capture credentials, then `/browse <url> <scenario>`.
+> npm install -g @playwright/cli@latest
+> ```
 >
-> Chrome DevTools MCP is an alternative but expects a pre-existing Chrome with remote-debugging enabled and exposes a different tool surface; Playwright MCP is recommended unless you already run DevTools MCP for other reasons.
+> Then re-run `/browse`.
 
 ### 2. Resolve the target URL
 
 - If parsed from `$ARGUMENTS`, use it.
 - Otherwise prompt the user inline: "What URL should I open? (e.g. `http://localhost:3000/dashboard`)" — this is free-text input, not a decision gate, so a prose prompt is fine.
-- If the URL is a localhost address, attempt navigation via the MCP with a 5-second timeout. Treat any of these as unreachable: `net::ERR_CONNECTION_REFUSED`, `ERR_CONNECTION_RESET`, navigation timeout exceeded, or the MCP's equivalent connection-error response. On unreachable, bail: "Dev server unreachable at `<url>`. Start it (e.g. `npm run dev`) and re-run."
-- If the URL uses HTTPS with a self-signed certificate, note this — Playwright MCP's `--ignore-https-errors` flag may be needed in the user's config; flag it once and continue.
+- Do **not** navigate yet — step 4 opens the browser, loads auth state, then navigates.
 
 ### 3. Resolve the scenario
 
@@ -83,9 +79,10 @@ Print this verbatim, then stop:
 - For "verify a recent change": run `git diff --name-only origin/HEAD..HEAD` (or fall back to `git diff HEAD~1..HEAD --name-only`) and surface the modified files, then ask which one's UI to focus on.
 - **Derive a tentative slug now**, before screenshots are captured in step 5, so `<slug>-screenshots/` is a known path before you need it. Source: the scenario (preferred) or the URL path. Run the validation + normalisation rules from step 7's slug section (path-traversal reject, illegal-char reject, kebab-normalise, max 80, empty-slug fallback to `browse-<YYYYMMDD-HHMM>`). The user can revise it at step 7 — if they do, rename the screenshots directory before writing the note.
 
-### 4. Load saved storage state (auth)
+### 4. Open browser, load auth state, and navigate
 
-- If `<repo>/.claude/browse/storage-state.json` exists: the file is present, but whether the MCP is *actually* using it depends on whether the user's Claude config started Playwright MCP with `--storage-state=<path>`. The skill cannot introspect MCP startup args. Note in the session log: `storage-state: file present (assumed loaded)`. If step 5 then redirects to a login page on a non-localhost host, the assumption was wrong — see the storage-state-expiry path.
+- Open a blank browser: `playwright-cli open about:blank --headed`.
+- If `<repo>/.claude/browse/storage-state.json` exists: load it via `playwright-cli state-load .claude/browse/storage-state.json`. Note in the session log: `storage-state: loaded`.
 - If the file does not exist and the target URL is a known auth-gated host (heuristic: it's not localhost, and the path doesn't include `/login`, `/signin`, `/auth`), dispatch `AskUserQuestion`:
   - Question: "No saved storage state. Continue without auth, or stop and run `/browse --setup` first?"
   - Header: "No auth"
@@ -93,17 +90,22 @@ Print this verbatim, then stop:
     - "Stop — I'll run `/browse --setup` first" *(Recommended)*
     - "Continue without auth (logged-out experience)"
 - If localhost or already on a login page: continue silently — this is fine.
+- Navigate to the target URL: `playwright-cli goto <url>`.
+- If the URL is a localhost address, treat connection errors (`net::ERR_CONNECTION_REFUSED`, `ERR_CONNECTION_RESET`, navigation timeout) as unreachable. Bail: "Dev server unreachable at `<url>`. Start it (e.g. `npm run dev`) and re-run."
+- If the URL uses HTTPS with a self-signed certificate, note this — the user may need to configure `ignoreHTTPSErrors` in `.playwright/cli.config.json`; flag it once and continue.
 
 ### 5. Drive the session
 
-- Open the URL via the MCP. Wait for `domcontentloaded` (or MCP equivalent).
-- **Detect storage-state expiry or misconfigured MCP.** If the page redirects to a login URL despite `storage-state: file present (assumed loaded)`, surface: "Storage state appears expired *or* your MCP wasn't started with `--storage-state=.claude/browse/storage-state.json`. Re-run `/browse --setup`, or check your Claude config matches the snippet in step 1." and stop.
-- Capture an initial screenshot (step 0). See **Screenshots** below for the path/naming rule.
+- Take an initial snapshot: `playwright-cli snapshot`. Read the snapshot to understand the page structure.
+- **Detect storage-state expiry.** If storage state was loaded in step 4 but the snapshot shows a login page (heuristic: current URL contains `/login`, `/signin`, `/auth`, or the snapshot contains a login form), bail with: "Storage state appears expired. Re-run `/browse --setup` to refresh credentials."
+- Capture an initial screenshot: `playwright-cli screenshot --filename=docs/research/interviews/<slug>-screenshots/00-initial.png`. See **Screenshots** below for naming rules.
 - Walk the scenario. Before each step, narrate one short sentence so the watching user knows what's coming. Examples:
   - "Clicking the *Settings* tab."
   - "Typing into the search box: `queue depth`."
   - "Taking a screenshot of the alerts panel."
-- After each meaningful step, capture a screenshot.
+- After each meaningful step:
+  1. Run `playwright-cli snapshot` to understand the new page state (read only the relevant portion).
+  2. Capture a screenshot for the research note.
 - **Destructive-action gate.** Before any of: form submit, delete, archive, send, pay, anything that issues a non-GET request the user might not intend — pause and ask via `AskUserQuestion`:
   - Question: "About to <action> on <URL>. Proceed?"
   - Header: "Destructive action"
@@ -114,8 +116,8 @@ Print this verbatim, then stop:
 
 - Directory: `docs/research/interviews/<slug>-screenshots/`. `mkdir -p` before saving.
 - Naming: `NN-<step-name>.png` where `NN` is the zero-padded 2-digit step number (`00-initial.png`, `01-clicked-settings.png`, …) and `<step-name>` is kebab-case derived from your narration sentence.
-- The MCP saves to disk if it supports a `path` parameter; otherwise capture the screenshot in-conversation and save via the file tool. Either way the resulting path is referenced in the markdown note.
-- **Sensitive-data warning.** If the target hostname is a known production domain (heuristic: not localhost, not a `*.test`/`*.local` hostname, not a staging subdomain), print once: "⚠ Screenshots may capture credentials, tokens, or PII. Consider `.gitignore`-ing `docs/research/interviews/<slug>-screenshots/` if this session touches secrets."
+- Screenshots are saved to disk via `playwright-cli screenshot --filename=<path>` — they never enter the context window.
+- **Sensitive-data warning.** If the target hostname is a known production domain (heuristic: not localhost, not a `*.test`/`*.local` hostname, not a staging subdomain), print once: "Screenshots may capture credentials, tokens, or PII. Consider `.gitignore`-ing `docs/research/interviews/<slug>-screenshots/` if this session touches secrets."
 
 ### 6. Summarise
 
@@ -160,7 +162,7 @@ target: "<URL>"
 scenario: "<one-line scenario summary>"
 slug: "<slug>"
 status: complete   # or "partial" if user stopped mid-session
-storage_state: "file present (assumed loaded)"   # or "none" if no auth was used
+storage_state: "loaded"   # or "none" if no auth was used
 branch: "<current branch if not main and not detached>"   # omit otherwise
 ---
 ```
@@ -172,20 +174,21 @@ Body:
 3. `## Insights` — the `### Insight:` blocks from step 6.
 4. `## Follow-ups` — bulleted list of suggested next moves with the suggested skill (`/triage`, `/plan <slug>`, `/research`).
 
-### 9. Report
+### 9. Close & report
 
-Print:
-- Note path written.
-- Screenshot directory path and file count.
-- Session status (`complete` / `partial`).
-- Storage-state mode (`loaded` / `none`).
-- Suggested next step: "`/triage` if follow-ups need ranking, `/plan <slug>` if a fix is worth scoping."
+- Close the browser: `playwright-cli close`.
+- Print:
+  - Note path written.
+  - Screenshot directory path and file count.
+  - Session status (`complete` / `partial`).
+  - Storage-state mode (`loaded` / `none`).
+  - Suggested next step: "`/triage` if follow-ups need ranking, `/plan <slug>` if a fix is worth scoping."
 
 ## Step S — Credential setup (`/browse --setup`)
 
 Triggered when `$ARGUMENTS` contains `--setup`. Behaviour:
 
-1. Pre-flight as in step 1 (require Playwright MCP — Chrome DevTools MCP doesn't expose a comparable storage-state pattern; bail if Playwright MCP isn't loaded).
+1. Pre-flight as in step 1 (require `playwright-cli`).
 2. Resolve the login URL from `$ARGUMENTS` (the non-`--setup` token); ask if absent.
 3. `mkdir -p .claude/browse` at the repo root. The directory should be `.gitignore`-d:
    - Read existing `.gitignore`. If `.claude/browse/` is not listed, append it under a new section heading `# /browse — never commit storage state`.
@@ -196,21 +199,18 @@ Triggered when `$ARGUMENTS` contains `--setup`. Behaviour:
        - "Create `.gitignore`" *(Recommended)*
        - "Use `.git/info/exclude` instead"
        - "Skip — I'll handle it manually"
-4. Confirm the user's Claude config has Playwright MCP started with `--storage-state=.claude/browse/storage-state.json`. If not (heuristic: tell the user we can't introspect their config but the path needs to match), print the snippet from step 1's **No MCP** block, ask the user to update their config, then exit with: "Update `~/.claude.json`, restart Claude Code, then re-run `/browse --setup <url>`."
-5. With config confirmed, drive the headed browser to the login URL via the MCP. Print: "Browser opened. Log in manually. When fully logged in (you can see your authenticated app state), reply with `saved` here."
-6. Wait for the user's `saved` reply. Once received, persist the storage state. Playwright's `--storage-state` CLI flag is a *load* path; the *save* mechanism is separate, and the way it's exposed depends on the MCP build:
-   - **If the MCP exposes a save tool** (Playwright MCP recent builds expose something equivalent to `mcp__playwright__browser_save_storage_state` or `browser_close` with a `storageStatePath` argument): call it, passing `<repo>/.claude/browse/storage-state.json` as the destination.
-   - **If no save tool is exposed**, bail with: "Your Playwright MCP build does not expose a storage-state save tool. Upgrade to the latest `@playwright/mcp` (`npx @playwright/mcp@latest`) and re-run `/browse --setup`. As a manual workaround, run a one-off `npx playwright codegen --save-storage=.claude/browse/storage-state.json <url>`, log in there, and exit — Playwright will write the file on close."
-   - After save, verify `<repo>/.claude/browse/storage-state.json` exists and is non-empty (`{"cookies":[…]}` shape, not the empty `{}`). If empty: the user may not have completed login before triggering save; surface the file size and ask whether to retry.
-7. Report: "Storage state saved to `.claude/browse/storage-state.json` (<size> bytes). Future `/browse` runs will reuse it. Re-run `/browse --setup` if the session expires."
+4. Open the browser at the login URL: `playwright-cli open <url> --headed`.
+5. Print: "Browser opened. Log in manually. When fully logged in (you can see your authenticated app state), reply with `saved` here."
+6. Wait for the user's `saved` reply. Once received, save the storage state: `playwright-cli state-save .claude/browse/storage-state.json`.
+7. Verify `.claude/browse/storage-state.json` exists and is non-empty (`{"cookies":[…]}` shape, not the empty `{}`). If empty: the user may not have completed login before triggering save; surface the file size and ask whether to retry.
+8. Report: "Storage state saved to `.claude/browse/storage-state.json` (<size> bytes). Future `/browse` runs will reuse it. Re-run `/browse --setup` if the session expires."
 
 ## Degradations
 
-- **No browser MCP** → step 1 prints the No MCP block and exits.
-- **MCP missing required capability** → step 1 bails with the missing-capability message.
+- **`playwright-cli` not installed** → step 1 prints the No CLI block and exits.
 - **Not in a git repo** → step 1 bail.
 - **Localhost dev server unreachable** → step 2 bail with "start your dev server and retry".
-- **Storage state expired** → step 5 detection bails with re-setup instruction.
+- **Storage state expired** → step 5 detection (redirect to login page after loading state) bails with re-setup instruction.
 - **User stops mid-session** → step 6 still drafts a note marked `status: partial` and writes it.
 - **User hard-cancels (Ctrl+C)** → no note written; session is lost. This is a fundamental limitation of slash-command execution.
 - **Slug collision** → step 7 prompts overwrite / append-timestamped / new-slug.
@@ -224,7 +224,7 @@ Triggered when `$ARGUMENTS` contains `--setup`. Behaviour:
 - Install the workshop with `--project` scope so its `/browse` lives at `./.claude/commands/browse.md` and only resolves in this repo.
 - Rename the file locally (`mv ~/.claude/commands/browse.md ~/.claude/commands/observe.md`) — slash command names follow the filename.
 
-The workshop ships as `/browse` to match the docs/plan and because most users won't have gstack.
+The workshop ships as `/browse` to match the docs/plans and because most users won't have gstack.
 
 ## See also
 
