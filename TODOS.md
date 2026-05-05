@@ -28,6 +28,8 @@ PR #23 (`feat/browse-playwright-cli`). Round 1 review by Codex CLI + `pr-reviewe
 
 - **`TODOS.md`** — Several earlier TODO items (lines 26-28, 33-35) reference MCP-specific concerns (MCP save tool, capability-check tool names, MCP config introspection, README storageState wording) that are now moot after the playwright-cli switch. Sweep and close.
 - **`commands/browse.md`** — No smoke test for the CLI auth flow (state-load → goto → expiry detection). A basic manual transcript would catch ordering regressions.
+- **`commands/browse.md:87`** (round 2) — `state-load` uses relative `.claude/...` path; running from a subdir could load the wrong file. Consider using `<repo>/.claude/...` absolute path.
+- **`commands/browse.md:98`** (round 2) — Expiry detection heuristic treats any `/auth` URL as a login page, which could cause false bails on apps with `/auth/callback` or similar non-login auth paths.
 
 ## Review findings — 2026-05-01
 

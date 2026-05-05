@@ -64,7 +64,7 @@ Print this verbatim, then stop:
 
 - If parsed from `$ARGUMENTS`, use it.
 - Otherwise prompt the user inline: "What URL should I open? (e.g. `http://localhost:3000/dashboard`)" — this is free-text input, not a decision gate, so a prose prompt is fine.
-- Do **not** navigate yet — step 4 loads auth state first, then step 5 opens and navigates.
+- Do **not** navigate yet — step 4 opens the browser, loads auth state, then navigates.
 
 ### 3. Resolve the scenario
 
@@ -79,12 +79,10 @@ Print this verbatim, then stop:
 - For "verify a recent change": run `git diff --name-only origin/HEAD..HEAD` (or fall back to `git diff HEAD~1..HEAD --name-only`) and surface the modified files, then ask which one's UI to focus on.
 - **Derive a tentative slug now**, before screenshots are captured in step 5, so `<slug>-screenshots/` is a known path before you need it. Source: the scenario (preferred) or the URL path. Run the validation + normalisation rules from step 7's slug section (path-traversal reject, illegal-char reject, kebab-normalise, max 80, empty-slug fallback to `browse-<YYYYMMDD-HHMM>`). The user can revise it at step 7 — if they do, rename the screenshots directory before writing the note.
 
-### 4. Open browser and load auth state
+### 4. Open browser, load auth state, and navigate
 
-- Open the browser: `playwright-cli open <url> --headed`. This launches a headed browser and navigates to the target URL.
-- If the URL is a localhost address, treat connection errors (`net::ERR_CONNECTION_REFUSED`, `ERR_CONNECTION_RESET`, navigation timeout) as unreachable. Bail: "Dev server unreachable at `<url>`. Start it (e.g. `npm run dev`) and re-run."
-- If the URL uses HTTPS with a self-signed certificate, note this — the user may need to configure `ignoreHTTPSErrors` in `.playwright/cli.config.json`; flag it once and continue.
-- If `<repo>/.claude/browse/storage-state.json` exists: load it via `playwright-cli state-load .claude/browse/storage-state.json`, then reload the page with `playwright-cli goto <url>` so the auth cookies take effect. Note in the session log: `storage-state: loaded`.
+- Open a blank browser: `playwright-cli open about:blank --headed`.
+- If `<repo>/.claude/browse/storage-state.json` exists: load it via `playwright-cli state-load .claude/browse/storage-state.json`. Note in the session log: `storage-state: loaded`.
 - If the file does not exist and the target URL is a known auth-gated host (heuristic: it's not localhost, and the path doesn't include `/login`, `/signin`, `/auth`), dispatch `AskUserQuestion`:
   - Question: "No saved storage state. Continue without auth, or stop and run `/browse --setup` first?"
   - Header: "No auth"
@@ -92,11 +90,14 @@ Print this verbatim, then stop:
     - "Stop — I'll run `/browse --setup` first" *(Recommended)*
     - "Continue without auth (logged-out experience)"
 - If localhost or already on a login page: continue silently — this is fine.
+- Navigate to the target URL: `playwright-cli goto <url>`.
+- If the URL is a localhost address, treat connection errors (`net::ERR_CONNECTION_REFUSED`, `ERR_CONNECTION_RESET`, navigation timeout) as unreachable. Bail: "Dev server unreachable at `<url>`. Start it (e.g. `npm run dev`) and re-run."
+- If the URL uses HTTPS with a self-signed certificate, note this — the user may need to configure `ignoreHTTPSErrors` in `.playwright/cli.config.json`; flag it once and continue.
 
 ### 5. Drive the session
 
-- **Detect storage-state expiry.** If storage state was loaded but the page redirected to a login URL (heuristic: current URL contains `/login`, `/signin`, `/auth`, or the page title/snapshot contains a login form), bail with: "Storage state appears expired. Re-run `/browse --setup` to refresh credentials."
 - Take an initial snapshot: `playwright-cli snapshot`. Read the snapshot to understand the page structure.
+- **Detect storage-state expiry.** If storage state was loaded in step 4 but the snapshot shows a login page (heuristic: current URL contains `/login`, `/signin`, `/auth`, or the snapshot contains a login form), bail with: "Storage state appears expired. Re-run `/browse --setup` to refresh credentials."
 - Capture an initial screenshot: `playwright-cli screenshot --filename=docs/research/interviews/<slug>-screenshots/00-initial.png`. See **Screenshots** below for naming rules.
 - Walk the scenario. Before each step, narrate one short sentence so the watching user knows what's coming. Examples:
   - "Clicking the *Settings* tab."
