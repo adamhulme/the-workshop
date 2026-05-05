@@ -75,10 +75,24 @@ Skill body inherits from `commands/research.md` for slug hardening and frontmatt
 **What to watch:**
 
 - **`/browse` collides with gstack's `browse` skill** for users who have both. Worth tracking whether real users hit this in practice. README documents the workaround (`--project` scope or local rename).
-- **Playwright MCP storage-state save mechanism** is the brittle bit — the skill assumes the MCP exposes a save tool. If users hit "MCP build does not expose a storage-state save tool", we'll need to point them at the manual `playwright codegen --save-storage` workaround the skill already documents.
 - **`interviews/` taxonomy** — the original plan put `/browse` notes under `docs/research/interviews/` to match existing folder convention, but a UI walkthrough isn't really an interview. Logged to TODOs as a follow-up — revisit after a few real sessions to see if it pollutes customer-interview lookups.
 
 **Follow-ups in TODOS.md:**
 
 - 6 should-fix items from round 1 (self-signed cert speculation, auth-gated heuristic conflicts, --setup close-context gap, capability-check tool names, step S/4 awkward wording).
 - 7 longer-term items (recent-change git-diff base, plan summary drift, solution doc copy alignment, README wording, smoke-test fixture, taxonomy concern, slug-screenshots notation).
+
+## Post-ship: switched to playwright-cli (2026-05-05)
+
+Rewrote `commands/browse.md` to use `playwright-cli` (the `@playwright/cli` package) instead of the Playwright MCP server. The skill now drives the browser via Bash calls to `playwright-cli` commands (`open`, `goto`, `snapshot`, `click`, `type`, `fill`, `screenshot`, `state-save`, `state-load`, `close`) rather than MCP tool calls (`mcp__playwright__*`).
+
+**Why:** Playwright MCP loads ~26 tool schemas (~3,600 tokens) on connect and returns screenshots/snapshots inline in the context window. `playwright-cli` has zero schema overhead and writes snapshots/screenshots to disk — the agent reads them only when needed. Benchmarks show ~4x token reduction (114K → 27K per session).
+
+**What changed:**
+
+- Pre-flight checks for `playwright-cli --version` instead of scanning for MCP tools.
+- "No MCP" setup block replaced with a one-line `npm install -g @playwright/cli@latest`.
+- Chrome DevTools MCP alternative path removed — `playwright-cli` is the single supported driver.
+- Storage state uses `playwright-cli state-save` / `state-load` instead of relying on MCP `--storage-state` flag and a separate save tool. This eliminates the previous brittleness around whether the MCP exposed a save tool.
+- `playwright-cli snapshot` introduced as the primary page-understanding tool (text-based, cheaper than screenshots).
+- Session cleanup via `playwright-cli close`.
