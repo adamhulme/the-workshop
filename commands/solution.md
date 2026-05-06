@@ -39,8 +39,10 @@ User arguments: $ARGUMENTS
    status: decided
    date: <YYYY-MM-DD>
    slug: <slug>
+   tags: [<2-4 lowercase kebab-case topic tags>]
    ---
    ```
+   Derive 2–4 tags from the problem domain and solution approach (e.g. `auth`, `performance`, `browser-automation`, `orchestration`). Reuse tags from other `docs/solutions/*.md` frontmatter before inventing new ones.
    Followed by `## Problem`, `## Options considered`, `## Chosen approach`, `## Rationale` sections.
 
 5. **In-progress stage** (advance from decided). Append a `## In progress` section capturing:
@@ -55,6 +57,9 @@ User arguments: $ARGUMENTS
    - What shipped (one-paragraph summary)
    - What to watch (metrics, edge cases, follow-ups)
    - **Plan-vs-reality drift** — compare against `## Chosen approach`. Note where execution diverged and why.
+   - **Reusable principle** — what did this work teach that applies beyond this specific task? State as a directive ("prefer X over Y because Z"), not a narrative. If nothing generalises, write "none — task-specific." Not every outcome produces a principle; forcing one when there isn't one is worse than silence.
+   - **CLAUDE.md update** — if the principle above is general enough to guide any future session (not just future work on this feature), append it to CLAUDE.md's `## Learned principles` section. Format: `- **<short name>** — <the principle>. *(from docs/solutions/<slug>.md, <date>)*`. Use `AskUserQuestion` to confirm before writing: "Add this principle to CLAUDE.md's learned principles? (yes / skip)".
+   - **Forward links** — append a `## See also` section listing relative links to `docs/plans/<slug>.md` and `docs/brainstorms/<slug>.md` if either exists. Skip silently if neither does.
    
    Update frontmatter: `status: outcome`, add `shipped: <YYYY-MM-DD>`.
 

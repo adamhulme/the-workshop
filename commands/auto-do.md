@@ -36,6 +36,8 @@ When the underlying skills change shape, this orchestrator re-reads the new bodi
   - **Follow-up** → A (TODOS.md).
   - **Test gap or regression test** → C (build inline). Non-negotiable.
 - **Design review per-dimension:** every dimension below 8 → "Add the missing spec to the plan." Skip the variants step. Skip Codex outside voice (eng-review's outside voice is sufficient — bounding LLM cost is the trade-off; the user can always run `/plan-design-review` interactively for deeper coverage).
+- **Solution outcome — reusable principle** → extract if one clearly generalises. Write "none — task-specific" otherwise. Err toward extraction — the human reviewer can prune.
+- **Solution outcome — CLAUDE.md update** → yes if the principle is about a tool choice, performance characteristic, or workflow pattern that any future session would benefit from. No if specific to a library version, a particular codebase's quirks, or a one-off workaround.
 - **Round-1 review gate** → "Address must-fix now (auto-push enabled)".
 - **Round-2 review with new must-fix** → see step 11 below for the safe-stop behaviour. Not a silent dump.
 
@@ -237,6 +239,8 @@ Required entries (in order):
 - For each TODO triage decision: `eng-review:todo:<item>: <A | C-test-gap | C-regression>`.
 - `solution-doc-decided: <written | skipped — <reason>>` (from step 6).
 - `solution-doc-in-progress: <written | skipped — step 6 also skipped>` (from step 8).
+- `principle-extracted: <yes: "<short name>" | none — task-specific>` (from solution outcome).
+- `claude-md-updated: <yes | no — <reason>>` (from solution outcome).
 - `test-command: <command run | none — could not detect>` (from step 9).
 - `tests: <passed | failed | skipped — <reason>>` (from step 9).
 - `diff-complexity: <N files>` (from step 9).

@@ -35,6 +35,12 @@ User arguments: $ARGUMENTS
    - `todos/` — triage findings and follow-ups. Use `/triage`.
 
    Write artefacts to these locations rather than scattering them. Prefer the workshop skills above to populate them.
+
+   ## Learned principles
+
+   Principles extracted from shipped work. Each links to its source solution. `/solution` prompts for extraction at the outcome stage.
+
+   <!-- Add new principles above this line. -->
    ```
 
 6. **Report.** Print a summary of what was created, what was skipped, and the suggested next step: "Try `/plan <task>` to capture your first plan, or `/solution <slug>` to capture an existing decision."

@@ -39,9 +39,11 @@ User arguments: $ARGUMENTS
    date: <YYYY-MM-DD>
    slug: <slug>
    topic: <one-line summary>
+   tags: [<2-4 lowercase kebab-case topic tags>]
    research: [<paths to grounding files>]
    ---
    ```
+   Derive 2–4 tags from the topic. Reuse tags from other `docs/` artifact frontmatter before inventing new ones.
    Followed by sections: `## User`, `## Ops`, `## Scope`, `## Risk`, `## Tensions`.
 
 8. **Report.** Print path written, count of grounding research files, count of tensions surfaced, and a suggestion: "Consider `/plan <slug>` to lock in a direction, or `/solution <slug>` to capture the chosen path with rationale."

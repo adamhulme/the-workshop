@@ -29,8 +29,10 @@ User arguments: $ARGUMENTS
    - **Pasted text**: use what the user provided.
 
 5. **Determine output type.**
-   - If `--type=interview` is set, or the source is recognisably an interview transcript, derive `<participant-slug>` from the participant name and target `docs/research/interviews/<participant-slug>.md` with the README's interview frontmatter (`participant`, `date`, `focus`).
-   - Otherwise derive `<slug>` from the Jira summary, page title, URL, or topic and target `docs/research/context/<slug>.md` with frontmatter (`source`, `date`, `topic`).
+   - If `--type=interview` is set, or the source is recognisably an interview transcript, derive `<participant-slug>` from the participant name and target `docs/research/interviews/<participant-slug>.md` with the README's interview frontmatter (`participant`, `date`, `focus`, `tags: [<2-4 tags>]`).
+   - Otherwise derive `<slug>` from the Jira summary, page title, URL, or topic and target `docs/research/context/<slug>.md` with frontmatter (`source`, `date`, `topic`, `tags: [<2-4 tags>]`).
+   
+   Derive 2–4 tags from the source material's domain. Reuse tags from other `docs/` artifact frontmatter before inventing new ones.
 
    Validate the derived slug before using it as a path (Jira/Confluence/web titles often contain path separators or filename-hostile characters):
    - **Reject** if it contains path separators (`/`, `\`), `..` segments, or starts with `/`, `~`, or a Windows drive letter (e.g. `C:`). These would write outside `docs/research/`.
