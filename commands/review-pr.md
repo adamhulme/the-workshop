@@ -15,10 +15,13 @@ The single user gate at step 4 uses **`AskUserQuestion`**, not a trailing prose 
 
 - 2 × Codex CLI calls (round 1 + round 2)
 - 1 × `pr-reviewer` subagent call (round 1)
+- 1 × `security-reviewer` subagent call (round 1)
+- 1 × `performance-reviewer` subagent call (round 1)
+- 1 × `compound-reviewer` subagent call (round 1)
 - Main-thread implementation pass(es)
 - 1–2 `git push` calls (auto-push, no force)
 
-= **3 LLM dispatches max**, plus implementation. No retry loops, no auto-iteration. Wall-time target: under 90s on a small-to-medium diff.
+= **6 LLM dispatches max**, plus implementation. No retry loops, no auto-iteration. All round 1 agents run in parallel — wall-time is the slowest agent, not the sum.
 
 ## Steps
 
@@ -34,18 +37,21 @@ The single user gate at step 4 uses **`AskUserQuestion`**, not a trailing prose 
 
 ### 2. Round 1 — parallel reviews
 
-In a single message, dispatch **both** in parallel:
+In a single message, dispatch **all five** in parallel:
 
 - **Codex review (Bash):** `codex exec --skip-git-repo-check "<rubric prompt>"`. Pipe or embed the diff. Same five-dimension rubric as `pr-reviewer` (correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup). Ask Codex for structured output: `file:line | category | severity | finding`.
 - **pr-reviewer subagent:** `Agent` tool with `subagent_type: pr-reviewer`. Prompt includes the diff and the same rubric.
+- **security-reviewer subagent:** `Agent` tool with `subagent_type: security-reviewer`. Prompt includes the diff. Reviews injection, auth/authz, secrets, path traversal, crypto, dependency risk.
+- **performance-reviewer subagent:** `Agent` tool with `subagent_type: performance-reviewer`. Prompt includes the diff. Reviews queries, caching, algorithmic complexity, memory, token/API cost.
+- **compound-reviewer subagent:** `Agent` tool with `subagent_type: compound-reviewer`. Prompt includes the diff. Reviews whether the work closes the compounding loop — solution docs, principle extraction, prevention strategies, artifact tagging, deferred work visibility.
 
-If `codex` is not on PATH, fall back to a second `Agent` call with `subagent_type: general-purpose`, prompted with the same rubric. Mirrors the fallback in `/plan-eng-review` and `/plan-design-review`.
+If `codex` is not on PATH, fall back to a `general-purpose` Agent for the Codex slot. If any specialized reviewer agent is missing, fall back to `general-purpose` prompted with that agent's rubric summary.
 
-Aggregate when both return.
+Aggregate when all return.
 
 ### 3. Consolidate findings
 
-Merge the two reviewers' lists. Dedupe by `(file, line, category)` — when both flag the same item, keep one entry annotated `(flagged by both)`. Group using `pr-reviewer`'s existing rubric:
+Merge all reviewers' lists. Dedupe by `(file, line, category)` — when multiple reviewers flag the same item, keep one entry annotated `(flagged by N reviewers)`. Group using `pr-reviewer`'s existing rubric:
 
 - **Must fix before merge**
 - **Should fix in this PR**
@@ -62,7 +68,7 @@ Use `gh pr comment <n> --body "<markdown>"`. Recommended body shape:
 ```
 ## /review-pr — Round 1
 
-Codex CLI + pr-reviewer agent reviewed `<commit-sha>` in parallel.
+Codex CLI + pr-reviewer + security-reviewer + performance-reviewer + compound-reviewer reviewed `<commit-sha>` in parallel.
 
 **Counts:** must-fix=<X> · should-fix=<Y> · follow-up=<Z>
 
@@ -166,6 +172,7 @@ Suggested next step: link to the PR (if reviewing a PR), or `gh pr create` (if r
 - **No diff** → step 1 abort with a clear message.
 - **`codex` not on PATH** → fall back to `general-purpose` Agent for the Codex slot, both rounds. Note the fallback in the report.
 - **`pr-reviewer` agent missing** (the workshop wasn't installed, or the user is running this command from outside) → bail with: "`/review-pr` requires the `pr-reviewer` agent. Run `./install.sh` from the workshop repo."
+- **Specialized reviewer agent missing** (`security-reviewer`, `performance-reviewer`, or `compound-reviewer`) → fall back to `general-purpose` Agent prompted with that reviewer's rubric summary. Log the fallback.
 - **Branch is default branch** → skip auto-push, do not refuse the rest of the flow.
 - **Branch has no upstream** → step 6 prompts before pushing.
 - **Push fails** → surface stderr, stop. No retry, no force.
@@ -184,4 +191,7 @@ Suggested next step: link to the PR (if reviewing a PR), or `gh pr create` (if r
 ## See also
 
 - `/plan-eng-review`, `/plan-design-review` — pre-implementation review loops; `/review-pr` is the post-implementation analogue.
-- `agents/pr-reviewer.md` — the existing five-dimension diff reviewer this command reuses.
+- `agents/pr-reviewer.md` — code quality (correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup).
+- `agents/security-reviewer.md` — security (injection, auth, secrets, crypto, dependencies).
+- `agents/performance-reviewer.md` — performance (queries, caching, complexity, memory, token cost).
+- `agents/compound-reviewer.md` — compounding (solution docs, principles, prevention, tagging, deferred work).
