@@ -25,3 +25,9 @@ The workshop ships opinionated tools, written in opinionated style. When writing
 - **Stay in scope.** A bug fix is a bug fix; a new skill is a new skill. Don't bundle drive-by refactors. One idea per change. If you spot something else worth fixing, drop it in `TODOS.md` and move on.
 - **Decision points use `AskUserQuestion`.** Trailing prose `(y/n)` prompts get buried under whatever the model just wrote. Surface gates as structured questions; users can type custom answers via the auto-provided "Other" option.
 - **Don't add what wasn't asked.** No defensive error handling for cases that can't happen. No backwards-compat shims for code nothing depends on. Trust internal callers and framework guarantees; only validate at real boundaries (user input, external APIs).
+
+## Learned principles
+
+Principles extracted from shipped work. Each links to its source solution. `/solution` prompts for extraction at the outcome stage.
+
+<!-- Add new principles above this line. -->
