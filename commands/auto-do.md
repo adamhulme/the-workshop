@@ -36,8 +36,11 @@ When the underlying skills change shape, this orchestrator re-reads the new bodi
   - **Follow-up** → A (TODOS.md).
   - **Test gap or regression test** → C (build inline). Non-negotiable.
 - **Design review per-dimension:** every dimension below 8 → "Add the missing spec to the plan." Skip the variants step. Skip Codex outside voice (eng-review's outside voice is sufficient — bounding LLM cost is the trade-off; the user can always run `/plan-design-review` interactively for deeper coverage).
+- **Solution outcome — what worked / what didn't** → answer both honestly based on the implementation record. "What didn't" should include dead ends, wrong turns, and friction — these are the highest-value compounding signal.
 - **Solution outcome — reusable principle** → extract if one clearly generalises. Write "none — task-specific" otherwise. Err toward extraction — the human reviewer can prune.
-- **Solution outcome — CLAUDE.md update** → yes if the principle is about a tool choice, performance characteristic, or workflow pattern that any future session would benefit from. No if specific to a library version, a particular codebase's quirks, or a one-off workaround.
+- **Solution outcome — prevention** → if "what didn't" reveals a class of problem, name the system change (CLAUDE.md principle, hook, test pattern). Write "none" if the friction was one-off.
+- **Solution outcome — CLAUDE.md update** → yes if the principle or prevention strategy is about a tool choice, performance characteristic, or workflow pattern that any future session would benefit from. No if specific to a library version, a particular codebase's quirks, or a one-off workaround.
+- **Solution outcome — system verification** → answer "Would the system catch this next time?" If no and prevention names a concrete action, write the `### System TODO` subsection.
 - **Round-1 review gate** → "Address must-fix now (auto-push enabled)".
 - **Round-2 review with new must-fix** → see step 11 below for the safe-stop behaviour. Not a silent dump.
 
@@ -111,7 +114,7 @@ Read `commands/plan-eng-review.md`. Execute inline with these auto-decisions:
 
 Equivalent of `/solution <slug>` at the `decided` stage:
 
-- Write `docs/solutions/<slug>.md` with frontmatter (`status: decided`, `date: <today>`, `slug: <slug>`).
+- Write `docs/solutions/<slug>.md` with frontmatter (`status: decided`, `date: <today>`, `slug: <slug>`, `category: <one of feature|bugfix|refactor|tooling|performance|security|architecture>`, `tags: [<2-4 tags>]`). Derive category and tags from the plan context per `/solution` step 4.
 - Body: `## Problem`, `## Options considered`, `## Chosen approach`, `## Rationale`, lifted from the plan and the eng review block.
 - If `docs/solutions/` is missing, log `solution-doc: skipped — docs/solutions/ not present` to the auto-decision log and continue. Skips are logged, never silent.
 
@@ -240,7 +243,9 @@ Required entries (in order):
 - `solution-doc-decided: <written | skipped — <reason>>` (from step 6).
 - `solution-doc-in-progress: <written | skipped — step 6 also skipped>` (from step 8).
 - `principle-extracted: <yes: "<short name>" | none — task-specific>` (from solution outcome).
+- `prevention-strategy: <yes: "<description>" | none>` (from solution outcome).
 - `claude-md-updated: <yes | no — <reason>>` (from solution outcome).
+- `system-catches-next-time: <yes | no — system-todo-written>` (from solution outcome).
 - `test-command: <command run | none — could not detect>` (from step 9).
 - `tests: <passed | failed | skipped — <reason>>` (from step 9).
 - `diff-complexity: <N files>` (from step 9).

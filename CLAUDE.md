@@ -28,6 +28,6 @@ The workshop ships opinionated tools, written in opinionated style. When writing
 
 ## Learned principles
 
-Principles extracted from shipped work. Each links to its source solution. `/solution` prompts for extraction at the outcome stage.
+Principles and prevention strategies extracted from shipped work. Each links to its source solution. `/solution` prompts for extraction at the outcome stage — asking what worked, what didn't, and whether the system would catch it next time.
 
 <!-- Add new principles above this line. -->

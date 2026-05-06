@@ -39,10 +39,11 @@ User arguments: $ARGUMENTS
    status: decided
    date: <YYYY-MM-DD>
    slug: <slug>
+   category: <one of: feature | bugfix | refactor | tooling | performance | security | architecture>
    tags: [<2-4 lowercase kebab-case topic tags>]
    ---
    ```
-   Derive 2–4 tags from the problem domain and solution approach (e.g. `auth`, `performance`, `browser-automation`, `orchestration`). Reuse tags from other `docs/solutions/*.md` frontmatter before inventing new ones.
+   Pick one `category` that best describes the nature of the work (for browsing). Derive 2–4 `tags` from the problem domain and solution approach (for searching). Reuse tags from other `docs/solutions/*.md` frontmatter before inventing new ones.
    Followed by `## Problem`, `## Options considered`, `## Chosen approach`, `## Rationale` sections.
 
 5. **In-progress stage** (advance from decided). Append a `## In progress` section capturing:
@@ -57,8 +58,15 @@ User arguments: $ARGUMENTS
    - What shipped (one-paragraph summary)
    - What to watch (metrics, edge cases, follow-ups)
    - **Plan-vs-reality drift** — compare against `## Chosen approach`. Note where execution diverged and why.
-   - **Reusable principle** — what did this work teach that applies beyond this specific task? State as a directive ("prefer X over Y because Z"), not a narrative. If nothing generalises, write "none — task-specific." Not every outcome produces a principle; forcing one when there isn't one is worse than silence.
-   - **CLAUDE.md update** — if the principle above is general enough to guide any future session (not just future work on this feature), append it to CLAUDE.md's `## Learned principles` section. Format: `- **<short name>** — <the principle>. *(from docs/solutions/<slug>.md, <date>)*`. Use `AskUserQuestion` to confirm before writing: "Add this principle to CLAUDE.md's learned principles? (yes / skip)".
+   - **What worked** — which decisions, tools, or approaches paid off? Be specific: name the pattern, not just "the plan was good."
+   - **What didn't** — what caused friction, wasted time, or surprised you? Include dead ends and wrong turns — these are the highest-value compounding signal.
+   - **Reusable principle** — distil from the above: what directive ("prefer X over Y because Z") would help a future session avoid the friction or repeat the success? If nothing generalises, write "none — task-specific." Not every outcome produces a principle; forcing one when there isn't one is worse than silence.
+   - **Prevention** — if "what didn't work" reveals a class of problem (not just this instance), state what system change would catch it automatically: a CLAUDE.md principle, a hook, a test pattern, a linter rule. Write "none" if the friction was one-off.
+   
+   Then run the **system update** sub-steps:
+   
+   - **CLAUDE.md update** — if the reusable principle or prevention strategy is general enough to guide any future session, append it to CLAUDE.md's `## Learned principles` section. Format: `- **<short name>** — <the principle>. *(from docs/solutions/<slug>.md, <date>)*`. Use `AskUserQuestion` to confirm before writing: "Add this principle to CLAUDE.md's learned principles? (yes / skip)".
+   - **System verification** — ask: "Would the system catch this automatically next time?" If no, and the prevention field names a concrete action (hook, test pattern, agent), note it in the solution doc as a `### System TODO` subsection under `## Outcome` for follow-up. Don't implement it inline — just make it visible.
    - **Forward links** — append a `## See also` section listing relative links to `docs/plans/<slug>.md` and `docs/brainstorms/<slug>.md` if either exists. Skip silently if neither does.
    
    Update frontmatter: `status: outcome`, add `shipped: <YYYY-MM-DD>`.
