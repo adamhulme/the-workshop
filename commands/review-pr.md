@@ -37,7 +37,14 @@ The single user gate at step 4 uses **`AskUserQuestion`**, not a trailing prose 
 
 ### 1a. Detect review scope
 
-From the diff's changed file list (`git diff --name-only`), determine which specialized agents to dispatch. Codex and pr-reviewer **always** run. The others fire only when the diff touches their domain:
+Determine which specialized agents to dispatch. Codex and pr-reviewer **always** run. The others fire only when the diff touches their domain.
+
+Get the changed-file list from the **same diff range step 1 captured** — not from a bare `git diff --name-only` (which only reports working-tree changes and would always be empty on a clean PR branch):
+
+- If reviewing a PR number: `gh pr diff <n> --name-only`
+- Else: `git diff <default>...HEAD --name-only`
+
+The changed-files list and the diff text below come from this same range:
 
 - **security-reviewer** fires when any changed file matches:
   - Auth/identity paths: `*auth*`, `*login*`, `*session*`, `*token*`, `*credential*`, `*permission*`, `*role*`, `*acl*`
