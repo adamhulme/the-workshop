@@ -114,7 +114,7 @@ Read `commands/plan-eng-review.md`. Execute inline with these auto-decisions:
 
 Equivalent of `/solution <slug>` at the `decided` stage:
 
-- Write `docs/solutions/<slug>.md` with frontmatter (`status: decided`, `date: <today>`, `slug: <slug>`).
+- Write `docs/solutions/<slug>.md` with frontmatter (`status: decided`, `date: <today>`, `slug: <slug>`, `category: <one of feature|bugfix|refactor|tooling|performance|security|architecture>`, `tags: [<2-4 tags>]`). Derive category and tags from the plan context per `/solution` step 4.
 - Body: `## Problem`, `## Options considered`, `## Chosen approach`, `## Rationale`, lifted from the plan and the eng review block.
 - If `docs/solutions/` is missing, log `solution-doc: skipped — docs/solutions/ not present` to the auto-decision log and continue. Skips are logged, never silent.
 
