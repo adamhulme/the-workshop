@@ -14,14 +14,14 @@ The single user gate at step 4 uses **`AskUserQuestion`**, not a trailing prose 
 ## Token / time budget (ceiling)
 
 - 2 × Codex CLI calls (round 1 + round 2)
-- 1 × `pr-reviewer` subagent call (round 1)
-- 1 × `security-reviewer` subagent call (round 1)
-- 1 × `performance-reviewer` subagent call (round 1)
-- 1 × `compound-reviewer` subagent call (round 1)
+- 1 × `pr-reviewer` subagent call (round 1, always)
+- 0–1 × `security-reviewer` subagent call (round 1, conditional)
+- 0–1 × `performance-reviewer` subagent call (round 1, conditional)
+- 0–1 × `compound-reviewer` subagent call (round 1, conditional)
 - Main-thread implementation pass(es)
 - 1–2 `git push` calls (auto-push, no force)
 
-= **6 LLM dispatches max**, plus implementation. No retry loops, no auto-iteration. All round 1 agents run in parallel — wall-time is the slowest agent, not the sum.
+= **3–6 LLM dispatches**, plus implementation. Specialized agents fire only when the diff warrants them. All round 1 agents run in parallel — wall-time is the slowest agent, not the sum.
 
 ## Steps
 
@@ -35,15 +35,40 @@ The single user gate at step 4 uses **`AskUserQuestion`**, not a trailing prose 
 - Bail with a clear message if there is no diff: "No diff to review."
 - Cap diff size: if larger than ~30k tokens, truncate with a one-line warning ("review will focus on the first 30k tokens; re-run on a narrower base").
 
+### 1a. Detect review scope
+
+From the diff's changed file list (`git diff --name-only`), determine which specialized agents to dispatch. Codex and pr-reviewer **always** run. The others fire only when the diff touches their domain:
+
+- **security-reviewer** fires when any changed file matches:
+  - Auth/identity paths: `*auth*`, `*login*`, `*session*`, `*token*`, `*credential*`, `*permission*`, `*role*`, `*acl*`
+  - Config/secrets paths: `*.env*`, `*config*`, `*secret*`, `*.pem`, `*.key`, `docker-compose*`, `*Dockerfile*`
+  - Input-handling code: `*controller*`, `*handler*`, `*middleware*`, `*route*`, `*api*`, `*endpoint*`
+  - Dependency files: `package.json`, `package-lock.json`, `Gemfile*`, `requirements*.txt`, `Cargo.toml`, `go.sum`, `*.lock`
+  - OR the diff text contains: `exec`, `eval`, `innerHTML`, `dangerouslySetInnerHTML`, `subprocess`, `shell`, `SQL`, `query(`, `crypto`, `bcrypt`, `jwt`
+
+- **performance-reviewer** fires when any changed file matches:
+  - Database/query paths: `*model*`, `*migration*`, `*schema*`, `*query*`, `*repo*`, `*repository*`
+  - Hot-path code: `*service*`, `*worker*`, `*job*`, `*queue*`, `*cache*`, `*index*`
+  - Frontend render paths: `*.tsx`, `*.jsx`, `*.vue`, `*.svelte` (component re-render risk)
+  - OR the diff text contains: `SELECT`, `INSERT`, `UPDATE`, `JOIN`, `WHERE`, `.find(`, `.filter(`, `.map(`, `O(`, `cache`, `memo`, `batch`
+  - OR the diff is large (>200 lines changed) — big diffs have higher perf-regression surface
+
+- **compound-reviewer** fires when:
+  - The diff touches `docs/solutions/`, `docs/plans/`, `docs/brainstorms/`, `docs/research/`, `CLAUDE.md`, `todos/`, or `commands/`
+  - OR the diff adds/modifies >3 files (non-trivial work that should be captured)
+  - OR a `docs/solutions/<slug>.md` exists whose slug matches the branch name (work that has a solution doc should keep it current)
+
+Log which agents were selected and why: `review-scope: codex + pr-reviewer + [security: <reason> | skipped] + [performance: <reason> | skipped] + [compound: <reason> | skipped]`.
+
 ### 2. Round 1 — parallel reviews
 
-In a single message, dispatch **all five** in parallel:
+In a single message, dispatch the selected agents in parallel:
 
-- **Codex review (Bash):** `codex exec --skip-git-repo-check "<rubric prompt>"`. Pipe or embed the diff. Same five-dimension rubric as `pr-reviewer` (correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup). Ask Codex for structured output: `file:line | category | severity | finding`.
-- **pr-reviewer subagent:** `Agent` tool with `subagent_type: pr-reviewer`. Prompt includes the diff and the same rubric.
-- **security-reviewer subagent:** `Agent` tool with `subagent_type: security-reviewer`. Prompt includes the diff. Reviews injection, auth/authz, secrets, path traversal, crypto, dependency risk.
-- **performance-reviewer subagent:** `Agent` tool with `subagent_type: performance-reviewer`. Prompt includes the diff. Reviews queries, caching, algorithmic complexity, memory, token/API cost.
-- **compound-reviewer subagent:** `Agent` tool with `subagent_type: compound-reviewer`. Prompt includes the diff. Reviews whether the work closes the compounding loop — solution docs, principle extraction, prevention strategies, artifact tagging, deferred work visibility.
+- **Codex review (Bash)** (always): `codex exec --skip-git-repo-check "<rubric prompt>"`. Pipe or embed the diff. Same five-dimension rubric as `pr-reviewer` (correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup). Ask Codex for structured output: `file:line | category | severity | finding`.
+- **pr-reviewer subagent** (always): `Agent` tool with `subagent_type: pr-reviewer`. Prompt includes the diff and the same rubric.
+- **security-reviewer subagent** (conditional): `Agent` tool with `subagent_type: security-reviewer`. Prompt includes the diff. Reviews injection, auth/authz, secrets, path traversal, crypto, dependency risk.
+- **performance-reviewer subagent** (conditional): `Agent` tool with `subagent_type: performance-reviewer`. Prompt includes the diff. Reviews queries, caching, algorithmic complexity, memory, token/API cost.
+- **compound-reviewer subagent** (conditional): `Agent` tool with `subagent_type: compound-reviewer`. Prompt includes the diff. Reviews whether the work closes the compounding loop — solution docs, principle extraction, prevention strategies, artifact tagging, deferred work visibility.
 
 If `codex` is not on PATH, fall back to a `general-purpose` Agent for the Codex slot. If any specialized reviewer agent is missing, fall back to `general-purpose` prompted with that agent's rubric summary.
 
@@ -68,7 +93,7 @@ Use `gh pr comment <n> --body "<markdown>"`. Recommended body shape:
 ```
 ## /review-pr — Round 1
 
-Codex CLI + pr-reviewer + security-reviewer + performance-reviewer + compound-reviewer reviewed `<commit-sha>` in parallel.
+<list of agents that ran> reviewed `<commit-sha>` in parallel.
 
 **Counts:** must-fix=<X> · should-fix=<Y> · follow-up=<Z>
 
