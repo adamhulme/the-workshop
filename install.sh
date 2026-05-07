@@ -61,29 +61,33 @@ fi
 
 cmd_count=0
 agent_count=0
+hook_count=0
 MANIFEST_LINES=()
 
 install_dir() {
   local kind="$1"
+  local ext="${2:-md}"
   local source_dir="$SOURCE_BASE/$kind"
   local target_dir="$TARGET_BASE/$kind"
   [[ -d "$source_dir" ]] || return 0
   mkdir -p "$target_dir"
-  for f in "$source_dir"/*.md; do
+  for f in "$source_dir"/*."$ext"; do
     [[ -e "$f" ]] || continue
     cp "$f" "$target_dir/"
+    [[ "$ext" == "sh" ]] && chmod +x "$target_dir/$(basename "$f")"
     echo "  installed $kind: $(basename "$f")"
     MANIFEST_LINES+=("$kind/$(basename "$f")")
-    if [[ "$kind" == "commands" ]]; then
-      cmd_count=$((cmd_count + 1))
-    else
-      agent_count=$((agent_count + 1))
-    fi
+    case "$kind" in
+      commands) cmd_count=$((cmd_count + 1)) ;;
+      agents)  agent_count=$((agent_count + 1)) ;;
+      hooks)   hook_count=$((hook_count + 1)) ;;
+    esac
   done
 }
 
 install_dir commands
 install_dir agents
+install_dir hooks sh
 
 if [[ "$cmd_count" -eq 0 && "$agent_count" -eq 0 ]]; then
   echo "No commands or agents found in $SOURCE_BASE — nothing installed." >&2
@@ -110,5 +114,10 @@ echo "$WORKSHOP_VERSION" > "$TARGET_BASE/.workshop-version"
 echo "scope=$SCOPE" > "$TARGET_BASE/.workshop-scope"
 
 echo ""
-echo "Installed $cmd_count command(s) and $agent_count agent(s) ($SCOPE scope, version $WORKSHOP_VERSION)."
+echo "Installed $cmd_count command(s), $agent_count agent(s), and $hook_count hook(s) ($SCOPE scope, version $WORKSHOP_VERSION)."
+if [[ "$hook_count" -gt 0 ]]; then
+  echo ""
+  echo "Hooks installed but not yet active. To enable, add hook config to settings.json."
+  echo "See comments in each hook file for setup instructions (${TARGET_BASE}/hooks/)."
+fi
 echo "Restart Claude Code; commands appear in /-autocomplete, agents are dispatchable via the Agent tool."
