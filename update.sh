@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Update the-workshop's installed slash commands and agents.
+# Update the-workshop's installed slash commands, agents, and hooks.
 #
 # Behaviour:
 #   1. Always shallow-clones the latest main from origin into a temp dir and
@@ -10,13 +10,13 @@
 #   3. Diffs the previous manifest against the new one and removes files that
 #      were installed by an earlier version of the workshop but are no longer
 #      shipped (i.e. skills the workshop removed or renamed). Manifest entries
-#      are validated against the expected commands/*.md / agents/*.md shape
-#      before any rm; anything else is logged and skipped. Files the workshop
-#      never installed are left alone.
+#      are validated against known install shapes (commands/*.md, agents/*.md,
+#      hooks/*.sh) before any rm; anything else is logged and skipped. Files
+#      the workshop never installed are left alone.
 #
 # Local:
-#   ./update.sh                    # user-scoped (~/.claude/{commands,agents}/)
-#   ./update.sh --project          # project-scoped (./.claude/{commands,agents}/)
+#   ./update.sh                    # user-scoped (~/.claude/{commands,agents,hooks}/)
+#   ./update.sh --project          # project-scoped (./.claude/{commands,agents,hooks}/)
 #
 # Remote (curl-pipe-bash):
 #   curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/update.sh | bash
@@ -30,13 +30,13 @@ TARGET_BASE=""
 
 usage() {
   cat <<USAGE
-Update the-workshop's installed slash commands and agents.
+Update the-workshop's installed slash commands, agents, and hooks.
 
 Usage:
   update.sh [--user|--project]
 
-  --user      Update the user-scoped install at ~/.claude/{commands,agents}/
-  --project   Update the project-scoped install at ./.claude/{commands,agents}/
+  --user      Update the user-scoped install at ~/.claude/{commands,agents,hooks}/
+  --project   Update the project-scoped install at ./.claude/{commands,agents,hooks}/
 
 If neither flag is given, update.sh auto-detects the scope from existing
 manifests and prefers --user when both exist.
@@ -115,11 +115,10 @@ if [[ "$HAD_PREV_MANIFEST" -eq 1 ]]; then
   trap 'rm -f "$PREV_MANIFEST" "$NEW_MANIFEST"; rm -rf "$CLONE_TMP"' EXIT
   grep -v '^#' "$TARGET_BASE/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$NEW_MANIFEST"
 
-  # Only allow pruning of paths matching the exact commands/<name>.md or
-  # agents/<name>.md shape. A tampered manifest containing .., absolute paths,
-  # or anything outside this shape is rejected outright — never trust
-  # manifest-supplied paths to construct an rm target without re-validating.
-  ALLOWED_RE='^(commands|agents)/[A-Za-z0-9._-]+\.md$'
+  # Only allow pruning of paths matching known install shapes. A tampered
+  # manifest containing .., absolute paths, or anything outside this shape
+  # is rejected outright — never trust manifest-supplied paths for rm.
+  ALLOWED_RE='^(commands|agents)/[A-Za-z0-9._-]+\.md$|^hooks/[A-Za-z0-9._-]+\.sh$'
   while IFS= read -r relpath; do
     [[ -z "$relpath" ]] && continue
     if [[ ! "$relpath" =~ $ALLOWED_RE ]]; then

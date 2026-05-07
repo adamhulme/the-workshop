@@ -26,8 +26,19 @@ The workshop ships opinionated tools, written in opinionated style. When writing
 - **Decision points use `AskUserQuestion`.** Trailing prose `(y/n)` prompts get buried under whatever the model just wrote. Surface gates as structured questions; users can type custom answers via the auto-provided "Other" option.
 - **Don't add what wasn't asked.** No defensive error handling for cases that can't happen. No backwards-compat shims for code nothing depends on. Trust internal callers and framework guarantees; only validate at real boundaries (user input, external APIs).
 
+## Token efficiency
+
+These directives reduce context window consumption without losing technical accuracy. Use `/grunt` to activate full terse mode.
+
+- **Reference, don't paste.** Never quote code blocks back in responses — reference by `path:line` instead. The user has the file open; redundant quoting wastes context tokens.
+- **Grep before you read.** Before reading an entire file, grep for the target symbol or pattern first, then read only the relevant line range with `offset`/`limit`. A 2000-line full read costs ~8K tokens; a 50-line targeted read costs ~200.
+- **Trim tool output.** When running shell commands, pipe through `head`, `tail`, or `grep` to keep only what's needed. Prefer `git log --oneline` over `git log`, `find ... | head -20` over unbounded `find`.
+
 ## Learned principles
 
 Principles and prevention strategies extracted from shipped work. Each links to its source solution. `/solution` prompts for extraction at the outcome stage — asking what worked, what didn't, and whether the system would catch it next time.
+
+- **Zero-dependency hooks.** Hook scripts that ship to arbitrary environments must parse with bash builtins only (`grep`/`sed`/parameter expansion). External tools (`jq`, `python`, `node`) may not exist on the target system. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
+- **Layered reduction beats single-mechanism.** Multiple complementary mechanisms at different activation costs (always-on directives, opt-in modes, automated enforcement) compound better than one aggressive approach. Each layer catches what the others miss. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
 
 <!-- Add new principles above this line. -->
