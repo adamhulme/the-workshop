@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Install the-workshop's slash commands and agents into your Claude Code config.
+# Install the-workshop's slash commands, agents, and hooks into your Claude Code config.
 #
 # Local:
-#   ./install.sh                    # user-scoped (~/.claude/{commands,agents}/)
-#   ./install.sh --project          # project-scoped (./.claude/{commands,agents}/)
+#   ./install.sh                    # user-scoped (~/.claude/{commands,agents,hooks}/)
+#   ./install.sh --project          # project-scoped (./.claude/{commands,agents,hooks}/)
 #
 # Remote (curl-pipe-bash):
 #   curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/install.sh | bash
@@ -17,13 +17,13 @@ TARGET_BASE="$HOME/.claude"
 
 usage() {
   cat <<USAGE
-Install the-workshop's slash commands and agents.
+Install the-workshop's slash commands, agents, and hooks.
 
 Usage:
   install.sh [--user|--project]
 
-  --user      Install to ~/.claude/{commands,agents}/ (default)
-  --project   Install to ./.claude/{commands,agents}/
+  --user      Install to ~/.claude/{commands,agents,hooks}/ (default)
+  --project   Install to ./.claude/{commands,agents,hooks}/
 USAGE
 }
 
@@ -89,8 +89,8 @@ install_dir commands
 install_dir agents
 install_dir hooks sh
 
-if [[ "$cmd_count" -eq 0 && "$agent_count" -eq 0 ]]; then
-  echo "No commands or agents found in $SOURCE_BASE — nothing installed." >&2
+if [[ "$cmd_count" -eq 0 && "$agent_count" -eq 0 && "$hook_count" -eq 0 ]]; then
+  echo "No commands, agents, or hooks found in $SOURCE_BASE — nothing installed." >&2
   exit 1
 fi
 

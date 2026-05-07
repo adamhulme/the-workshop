@@ -23,16 +23,34 @@
 
 INPUT=$(cat)
 
-# Parse JSON without jq — the three fields are simple string/number values.
-extract() { local v; v=$(echo "$INPUT" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*[^,}]*" | head -1 | sed 's/.*:[[:space:]]*//;s/"//g;s/[[:space:]]*$//'); [[ "$v" == "null" ]] && v=""; echo "$v"; }
+# Parse JSON without jq. Handles quoted strings (including those with commas)
+# and bare values (numbers, null, true/false).
+extract() {
+  local v
+  local dq='"'
+  # Try quoted string value first (handles commas, colons in paths)
+  v=$(echo "$INPUT" | grep -o "${dq}$1${dq}[[:space:]]*:[[:space:]]*${dq}[^${dq}]*${dq}" | head -1 | sed "s/.*:[[:space:]]*${dq}//;s/${dq}$//")
+  if [[ -z "$v" ]]; then
+    # Fall back to bare value (numbers, null, booleans)
+    v=$(echo "$INPUT" | grep -o "${dq}$1${dq}[[:space:]]*:[[:space:]]*[^,}]*" | head -1 | sed 's/.*:[[:space:]]*//' | tr -d ' ')
+  fi
+  [[ "$v" == "null" ]] && v=""
+  echo "$v"
+}
 
 FILE_PATH=$(extract file_path)
 OFFSET=$(extract offset)
 LIMIT=$(extract limit)
+PAGES=$(extract pages)
 
 # Already targeted — no warning needed
-[[ -n "$OFFSET" || -n "$LIMIT" ]] && exit 0
+[[ -n "$OFFSET" || -n "$LIMIT" || -n "$PAGES" ]] && exit 0
 [[ -z "$FILE_PATH" || ! -f "$FILE_PATH" ]] && exit 0
+
+# Skip binary files — line counts are meaningless for images, PDFs, etc.
+case "${FILE_PATH##*.}" in
+  png|jpg|jpeg|gif|webp|svg|ico|bmp|pdf|zip|tar|gz|bz2|xz|woff|woff2|ttf|eot|mp3|mp4|mov|avi|o|so|dylib|wasm) exit 0 ;;
+esac
 
 LINE_COUNT=$(wc -l < "$FILE_PATH" 2>/dev/null || echo 0)
 
