@@ -38,4 +38,7 @@ These directives reduce context window consumption without losing technical accu
 
 Principles and prevention strategies extracted from shipped work. Each links to its source solution. `/solution` prompts for extraction at the outcome stage — asking what worked, what didn't, and whether the system would catch it next time.
 
+- **Zero-dependency hooks.** Hook scripts that ship to arbitrary environments must parse with bash builtins only (`grep`/`sed`/parameter expansion). External tools (`jq`, `python`, `node`) may not exist on the target system. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
+- **Layered reduction beats single-mechanism.** Multiple complementary mechanisms at different activation costs (always-on directives, opt-in modes, automated enforcement) compound better than one aggressive approach. Each layer catches what the others miss. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
+
 <!-- Add new principles above this line. -->
