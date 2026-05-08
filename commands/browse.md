@@ -38,6 +38,7 @@ All browser interaction happens via Bash calls to `playwright-cli`. Key patterns
 - **Key press:** `playwright-cli press <key>` (e.g. `Enter`, `Tab`, `ArrowDown`).
 - **Tabs:** `playwright-cli tab-list`, `playwright-cli tab-new [url]`, `playwright-cli tab-select <index>`.
 - **Storage state:** `playwright-cli state-save <filename>`, `playwright-cli state-load <filename>`.
+- **Cookies:** `playwright-cli cookie-list`, `playwright-cli cookie-get <name>`, `playwright-cli cookie-set <name> <value> [--domain=...] [--path=...] [--sameSite=...]`.
 
 **Token discipline:** prefer `snapshot` over `screenshot` for understanding page structure — snapshots are text and cheaper to read. Only capture screenshots for the research note or when visual verification matters. When reading a snapshot, read only the portion you need.
 
@@ -82,7 +83,7 @@ Print this verbatim, then stop:
 ### 4. Open browser, load auth state, and navigate
 
 - Open a blank browser: `playwright-cli open about:blank --headed`.
-- If `<repo>/.claude/browse/storage-state.json` exists: load it via `playwright-cli state-load .claude/browse/storage-state.json`. Note in the session log: `storage-state: loaded`.
+- If `<repo>/.claude/browse/storage-state.json` exists: load it via `playwright-cli state-load .claude/browse/storage-state.json`. Then restore session cookies: `state-load` silently drops cookies with `expires=-1` (session cookies). Read the JSON file, find any cookie with `expires` equal to `-1`, and re-set each one via `playwright-cli cookie-set <name> <value> --domain=<domain> --path=<path> --sameSite=<sameSite>`. Note in the session log: `storage-state: loaded`.
 - If the file does not exist and the target URL is a known auth-gated host (heuristic: it's not localhost, and the path doesn't include `/login`, `/signin`, `/auth`), dispatch `AskUserQuestion`:
   - Question: "No saved storage state. Continue without auth, or stop and run `/browse --setup` first?"
   - Header: "No auth"
@@ -210,6 +211,7 @@ Triggered when `$ARGUMENTS` contains `--setup`. Behaviour:
 - **`playwright-cli` not installed** → step 1 prints the No CLI block and exits.
 - **Not in a git repo** → step 1 bail.
 - **Localhost dev server unreachable** → step 2 bail with "start your dev server and retry".
+- **Session cookies dropped by `state-load`** → `playwright-cli state-load` restores localStorage and persistent cookies but silently drops session cookies (`expires=-1`). Step 4 compensates by reading the JSON and re-setting them via `cookie-set`.
 - **Storage state expired** → step 5 detection (redirect to login page after loading state) bails with re-setup instruction.
 - **User stops mid-session** → step 6 still drafts a note marked `status: partial` and writes it.
 - **User hard-cancels (Ctrl+C)** → no note written; session is lost. This is a fundamental limitation of slash-command execution.
