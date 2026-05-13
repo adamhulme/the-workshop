@@ -95,7 +95,7 @@ Print the consolidated list with counts per category.
 
 If a PR number was supplied in step 1, post the consolidated round 1 list as a top-level PR comment so the findings live alongside the PR forever — not just in this conversation. Skip silently when reviewing a feature branch with no PR.
 
-Use `gh pr comment <n> --body "<markdown>"`. Recommended body shape:
+Use `gh pr comment <n> --body "$BODY"` where `BODY` is a shell variable built beforehand (so you can interpolate the commit SHA and other values). Do **not** use a single-quoted heredoc (`<<'EOF'`) for the body — that suppresses variable expansion and leaves `$COMMIT_SHA` literal in the comment. Recommended body shape:
 
 ```
 ## /review-pr — Round 1
