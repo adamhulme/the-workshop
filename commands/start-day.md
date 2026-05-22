@@ -161,7 +161,7 @@ If the file already exists (e.g. from a mid-day /end-day run), read it first. Us
 
 **Merge rules for /start-day:**
 
-- `<!-- GOALS:START -->` / `<!-- GOALS:END -->` — **REPLACE** with new goals (or remove if user skipped).
+- `<!-- GOALS:START -->` / `<!-- GOALS:END -->` — **REPLACE** if user provided new goals. **PRESERVE** if exists and user skipped goals.
 - `<!-- NOTES:START -->` / `<!-- NOTES:END -->` — **PRESERVE** if exists.
 - `<!-- SNAPSHOTS:START -->` / `<!-- SNAPSHOTS:END -->` — **REPLACE** with fresh snapshots.
 - Frontmatter — **PRESERVE** if exists.
@@ -205,7 +205,7 @@ date: <YYYY-MM-DD>
 <!-- SNAPSHOTS:END -->
 ```
 
-Omit the Goals section entirely if the user skipped goals and no prior goals exist. Omit the Notes section if no prior notes exist (notes are only written by /end-day). Always include Snapshots.
+Omit the Goals section entirely if the user skipped goals and no prior goals exist. Omit the Notes section if no prior notes exist (notes are only written by /end-day). Always include Snapshots unless both repos are missing (see Degradations).
 
 ### 8. Report
 

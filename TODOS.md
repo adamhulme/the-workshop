@@ -1,5 +1,24 @@
 # TODOs
 
+## Review findings — 2026-05-22 (PR #30, /start-day + /end-day)
+
+Round 1 review by Codex CLI, pr-reviewer, and compound-reviewer in parallel. 3 must-fix items addressed inline; the following should-fix and follow-up items are deferred.
+
+### Should fix
+
+- **`commands/start-day.md:27` fetch before path validation** — runs `git -C <path> fetch` before checking if the path exists or is a git repo, so missing repos emit errors before the intended skip/warn flow. Fix: move the path/git-repo validation before the fetch. *(Codex)*
+- **`commands/end-day.md:37`, `commands/start-day.md:50` merged-branch check uses local `main`** — should check `origin/main` (or `origin/master`) instead of local `main` after fetching, since local default branch may be stale or absent. *(Codex)*
+- **`commands/start-day.md:76` "branch gone" uncomputable** — snapshot stores branch names but not enough remote/local existence context to detect deleted branches. Either store more metadata or drop the "branch gone" delta from the diff step. *(Codex)*
+- **`commands/start-day.md:77-78` commit count uncomputable** — example says "3 new commits" but no instruction to run `git rev-list <old-hash>..HEAD --count`. Either add the instruction or drop the count from the example. *(flagged by 2 reviewers)*
+- **`commands/end-day.md:7`, `commands/start-day.md:7` `$ARGUMENTS` declared but never used** — every other command that declares it actually uses it. Either remove the line or define accepted arguments (e.g. `--skip-notes`, `--skip-goals`). *(pr-reviewer)*
+- **CLAUDE.md: sentinel-delimiter principle** — the `<!-- SECTION:START/END -->` pattern for idempotent file merging is reusable. Should be captured in CLAUDE.md's Learned Principles once the solution doc reaches outcome stage. *(compound-reviewer)*
+- **TODOS.md: deferred work visibility** — plan documents deferrals (scheduled capture via `/schedule`, weekly summaries v2, project auto-discovery) that are not tracked where `/triage` can find them. Items: (1) scheduled end-of-day capture (v2), (2) weekly summaries / trend detection (v2), (3) project auto-discovery if hardcoded repos change. *(compound-reviewer)*
+
+### Follow-up
+
+- **`docs/plans/daily-workflow-capture.md:16` plan data model lacks sentinels** — the example format in the plan doesn't show the HTML comment sentinels that the implemented skills require. Plan and implementation disagree. *(Codex)*
+- **`commands/start-day.md:87` Jira integration has no verification path** — the Jira MCP integration degrades gracefully but has no smoke test or manual verification step. *(Codex)*
+
 ## Review findings — 2026-05-04 (PR #22 round 2, /auto-fleet v1)
 
 Round 2 of `/review-pr` on PR #22. 2 new must-fix items addressed inline (`Dispatch anyway` remote-only branch handling; worktree-management section's stale `.gitignore` reference). 2 should-fix plan-drift items folded inline alongside (plan referenced the pre-fix `gh pr list --head 'auto-do/*'` and the auto-modify-`.gitignore` flow; both updated to match the round-1 fixes). The following should-fix and follow-up items are deferred.

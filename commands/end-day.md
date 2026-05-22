@@ -82,7 +82,7 @@ If the file already exists, read it first. Use HTML comment sentinels to identif
 **Merge rules for /end-day:**
 
 - `<!-- GOALS:START -->` / `<!-- GOALS:END -->` — **PRESERVE** if exists and user skipped goals in step 4. **REPLACE** if user provided new goals.
-- `<!-- NOTES:START -->` / `<!-- NOTES:END -->` — **REPLACE** with new notes (or remove section content if user skipped notes).
+- `<!-- NOTES:START -->` / `<!-- NOTES:END -->` — **REPLACE** if user provided new notes. **PRESERVE** if exists and user skipped notes.
 - `<!-- SNAPSHOTS:START -->` / `<!-- SNAPSHOTS:END -->` — **REPLACE** with fresh snapshots.
 - Frontmatter — **PRESERVE** if exists.
 
@@ -125,7 +125,7 @@ date: <YYYY-MM-DD>
 <!-- SNAPSHOTS:END -->
 ```
 
-Omit the Goals section entirely if the user skipped goals and no prior goals exist. Omit the Notes section if the user skipped notes and no prior notes exist. Always include Snapshots.
+Omit the Goals section entirely if the user skipped goals and no prior goals exist. Omit the Notes section if the user skipped notes and no prior notes exist. Always include Snapshots unless both repos are missing (see Degradations).
 
 ### 6. Report
 
