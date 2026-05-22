@@ -36,7 +36,10 @@ For each repo in the config table, gather the following. If the repo path does n
 
 **Staleness detection:**
 
-- If the branch is not `main` or `master`, check if it has been merged: `git -C <path> branch -r --merged main 2>/dev/null | grep -q "origin/<branch>"` (also try `master` if `main` fails). If merged, append `(merged)` to the branch line.
+- If the branch is not `main` or `master`, check if it has been merged using two methods (squash/rebase merges create new commits that `--merged` won't detect):
+  1. Git ancestry: `git -C <path> branch -r --merged main 2>/dev/null | grep -q "origin/<branch>"` (also try `master` if `main` fails).
+  2. GitHub PR state (if `gh` is available): `gh pr list -R <github-slug> --head <branch> --state merged --json number --jq 'length'`. If the count is >0, the branch was merged via PR.
+  If either method confirms a merge, append `(merged)` to the branch line.
 - If the branch is not `main`/`master` and the last commit is older than 3 days, append `(stale — last activity N days ago)`.
 
 **Open PRs (optional):**
@@ -73,22 +76,35 @@ Dispatch `AskUserQuestion`:
 
 If the user provides goals via Other, format each line as a `- [ ]` checkbox item.
 
-### 5. Write the daily file
+### 5. Write the daily files
 
-Target path: `~/.claude/daily/<YYYY-MM-DD>.md` using the workday date.
+/end-day writes to **two** files: today's file for notes + snapshots, and tomorrow's file for goals. This prevents /end-day from overwriting today's goals (set by /start-day that morning) and ensures /start-day tomorrow sees the goals in the right place.
 
-If the file already exists, read it first. Use HTML comment sentinels to identify sections. Replace content between sentinel pairs; preserve any section whose sentinels exist but whose content is not being updated by this run.
+**Today's file** — `~/.claude/daily/<YYYY-MM-DD>.md` using the workday date:
 
-**Merge rules for /end-day:**
+If the file already exists, read it first. Use HTML comment sentinels to identify sections.
 
-- `<!-- GOALS:START -->` / `<!-- GOALS:END -->` — **PRESERVE** if exists and user skipped goals in step 4. **REPLACE** if user provided new goals.
+- `<!-- GOALS:START -->` / `<!-- GOALS:END -->` — **PRESERVE** always. Today's goals were set by /start-day; /end-day never touches them.
 - `<!-- NOTES:START -->` / `<!-- NOTES:END -->` — **REPLACE** if user provided new notes. **PRESERVE** if exists and user skipped notes.
 - `<!-- SNAPSHOTS:START -->` / `<!-- SNAPSHOTS:END -->` — **REPLACE** with fresh snapshots.
 - Frontmatter — **PRESERVE** if exists.
 
-If the file does not exist (or sentinels are missing/corrupted), write the full file from scratch.
+If the file does not exist, write it from scratch (without a Goals section — goals for today should have been set by /start-day).
 
-**File format:**
+If sentinels for a section are missing but other sentinels exist, insert the new section alongside existing content — do not treat missing sentinels as corruption when other sentinels are present. Only treat the file as corrupt (full rewrite) when it has no sentinels at all despite having content.
+
+**Tomorrow's file** — `~/.claude/daily/<YYYY-MM-DD>.md` using the **next** workday date (workday date + 1 calendar day):
+
+Only write this file if the user provided goals in step 4. If they skipped goals, don't create or touch tomorrow's file.
+
+If the file already exists (unlikely but possible), read it first and use sentinels:
+
+- `<!-- GOALS:START -->` / `<!-- GOALS:END -->` — **REPLACE** with new goals.
+- All other sections — **PRESERVE** if they exist.
+
+If the file does not exist, write it with frontmatter and the Goals section only.
+
+**Today's file format:**
 
 ```markdown
 ---
@@ -97,8 +113,7 @@ date: <YYYY-MM-DD>
 
 <!-- GOALS:START -->
 ## Goals
-- [ ] <goal 1>
-- [ ] <goal 2>
+(preserved from /start-day — /end-day does not touch this section)
 <!-- GOALS:END -->
 
 <!-- NOTES:START -->
@@ -125,12 +140,27 @@ date: <YYYY-MM-DD>
 <!-- SNAPSHOTS:END -->
 ```
 
-Omit the Goals section entirely if the user skipped goals and no prior goals exist. Omit the Notes section if the user skipped notes and no prior notes exist. Always include Snapshots unless both repos are missing (see Degradations).
+Omit the Notes section if the user skipped notes and no prior notes exist. Always include Snapshots unless both repos are missing (see Degradations).
+
+**Tomorrow's file format** (only written if user provided goals):
+
+```markdown
+---
+date: <YYYY-MM-DD>
+---
+
+<!-- GOALS:START -->
+## Goals
+- [ ] <goal 1>
+- [ ] <goal 2>
+<!-- GOALS:END -->
+```
 
 ### 6. Report
 
 Print:
-- Path written (e.g. `~/.claude/daily/2026-05-22.md`)
+- Today's file path (e.g. `~/.claude/daily/2026-05-22.md`)
+- Tomorrow's file path if goals were written (e.g. `~/.claude/daily/2026-05-23.md`)
 - One-line summary per repo: branch, status count, PR count
 - Whether notes and goals were captured or skipped
 
@@ -140,4 +170,5 @@ Print:
 - **Both repos missing** — write the file with notes/goals only (no Snapshots section). Warn: "Neither repo found — snapshot skipped."
 - **`gh` not installed or not authenticated** — skip PR data, note in output.
 - **`~/.claude/daily/` can't be created** — bail with error message.
-- **Sentinels corrupted or missing in existing file** — treat as fresh write (overwrite entire file).
+- **Some sentinels missing but others present** — insert new sections alongside existing content. Only full-rewrite when no sentinels exist at all despite having content.
+- **All sentinels missing in existing file** — treat as fresh write (overwrite entire file).

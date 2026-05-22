@@ -52,7 +52,10 @@ If the repo path does not exist or is not a git repo, log `(skipping <name> — 
 
 **Staleness detection:**
 
-- If the branch is not `main` or `master`, check if it has been merged: `git -C <path> branch -r --merged main 2>/dev/null | grep -q "origin/<branch>"` (also try `master` if `main` fails). If merged, append `(merged)` to the branch line.
+- If the branch is not `main` or `master`, check if it has been merged using two methods (squash/rebase merges create new commits that `--merged` won't detect):
+  1. Git ancestry: `git -C <path> branch -r --merged main 2>/dev/null | grep -q "origin/<branch>"` (also try `master` if `main` fails).
+  2. GitHub PR state (if `gh` is available): `gh pr list -R <github-slug> --head <branch> --state merged --json number --jq 'length'`. If the count is >0, the branch was merged via PR.
+  If either method confirms a merge, append `(merged)` to the branch line.
 - If the branch is not `main`/`master` and the last commit is older than 3 days, append `(stale — last activity N days ago)`.
 
 **Open PRs (optional):**
@@ -166,7 +169,9 @@ If the file already exists (e.g. from a mid-day /end-day run), read it first. Us
 - `<!-- SNAPSHOTS:START -->` / `<!-- SNAPSHOTS:END -->` — **REPLACE** with fresh snapshots.
 - Frontmatter — **PRESERVE** if exists.
 
-If the file does not exist (or sentinels are missing/corrupted), write the full file from scratch.
+If sentinels for a section are missing but other sentinels exist, insert the new section alongside existing content — do not treat missing sentinels as corruption when other sentinels are present. Only treat the file as corrupt (full rewrite) when it has no sentinels at all despite having content.
+
+If the file does not exist, write it from scratch.
 
 **File format:**
 
@@ -224,5 +229,6 @@ Print:
 - **`gh` not installed or not authenticated** — skip PR data, note in output.
 - **Jira MCP not configured** — skip silently.
 - **`git fetch` fails** — continue with local state, no warning (network issues are transient).
-- **Sentinels corrupted or missing in existing file** — treat as fresh write (overwrite entire file).
+- **Some sentinels missing but others present** — insert new sections alongside existing content. Only full-rewrite when no sentinels exist at all despite having content.
+- **All sentinels missing in existing file** — treat as fresh write (overwrite entire file).
 - **Previous file is very old (>5 days)** — show it but note the age.
