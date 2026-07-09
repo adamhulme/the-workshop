@@ -1,147 +1,172 @@
 #!/usr/bin/env bash
-# Update the-workshop's installed slash commands, agents, and hooks.
+# Update the-workshop's installed runtime adapters.
 #
 # Behaviour:
 #   1. Always shallow-clones the latest main from origin into a temp dir and
-#      runs install.sh from there — this is the whole point of "update", so
-#      it never trusts a local clone (which may be stale). If you want to
-#      install from a local checkout instead, run install.sh directly.
-#   2. Overwrites any local edits to installed skill files (silent overwrite).
-#   3. Diffs the previous manifest against the new one and removes files that
-#      were installed by an earlier version of the workshop but are no longer
-#      shipped (i.e. skills the workshop removed or renamed). Manifest entries
-#      are validated against known install shapes (commands/*.md, agents/*.md,
-#      hooks/*.sh) before any rm; anything else is logged and skipped. Files
-#      the workshop never installed are left alone.
-#
-# Local:
-#   ./update.sh                    # user-scoped (~/.claude/{commands,agents,hooks}/)
-#   ./update.sh --project          # project-scoped (./.claude/{commands,agents,hooks}/)
-#
-# Remote (curl-pipe-bash):
-#   curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/update.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/adamhulme/the-workshop/main/update.sh | bash -s -- --project
+#      runs install.sh from there.
+#   2. Overwrites installed workshop adapter files.
+#   3. Diffs the previous manifest against the new one and prunes files that
+#      were installed by an earlier version but are no longer shipped.
+#   4. Supports Claude, Codex, or both runtimes. Manifests are scoped to each
+#      runtime target, so one adapter cannot prune the other.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/adamhulme/the-workshop.git"
 SCOPE=""
-TARGET_BASE=""
+RUNTIME=""
+CLAUDE_TARGET_BASE=""
+CODEX_TARGET_BASE=""
 
 usage() {
   cat <<USAGE
-Update the-workshop's installed slash commands, agents, and hooks.
+Update the-workshop adapters.
 
 Usage:
-  update.sh [--user|--project]
+  update.sh [--user|--project] [--claude|--codex|--both]
 
-  --user      Update the user-scoped install at ~/.claude/{commands,agents,hooks}/
-  --project   Update the project-scoped install at ./.claude/{commands,agents,hooks}/
+  --user      Update user-scoped install(s)
+  --project   Update project-scoped install(s)
+  --claude    Update Claude Code adapter
+  --codex     Update Codex adapter
+  --both      Update both adapters
 
-If neither flag is given, update.sh auto-detects the scope from existing
-manifests and prefers --user when both exist.
+If no scope is given, update.sh auto-detects user vs project manifests and
+prefers user when both exist. If no runtime is given, it updates every detected
+runtime, or Claude by default for backwards compatibility.
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --project) SCOPE="project"; TARGET_BASE=".claude"; shift ;;
-    --user)    SCOPE="user";    TARGET_BASE="$HOME/.claude"; shift ;;
+    --project) SCOPE="project"; shift ;;
+    --user)    SCOPE="user"; shift ;;
+    --claude)  RUNTIME="claude"; shift ;;
+    --codex)   RUNTIME="codex"; shift ;;
+    --both)    RUNTIME="both"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown flag: $1" >&2; usage; exit 1 ;;
   esac
 done
 
-# Auto-detect scope when neither flag was passed. Default to user when no
-# manifest exists anywhere — pre-manifest installs and fresh boxes both land
-# here, and --project users pass the flag explicitly.
+set_targets() {
+  if [[ "$SCOPE" == "project" ]]; then
+    CLAUDE_TARGET_BASE=".claude"
+    CODEX_TARGET_BASE=".codex/the-workshop"
+  else
+    CLAUDE_TARGET_BASE="$HOME/.claude"
+    CODEX_TARGET_BASE="$HOME/.codex/the-workshop"
+  fi
+}
+
 if [[ -z "$SCOPE" ]]; then
-  if [[ -f "$HOME/.claude/.workshop-manifest" ]]; then
+  if [[ -f "$HOME/.claude/.workshop-manifest" || -f "$HOME/.codex/the-workshop/.workshop-manifest" ]]; then
     SCOPE="user"
-    TARGET_BASE="$HOME/.claude"
-  elif [[ -f ".claude/.workshop-manifest" ]]; then
+  elif [[ -f ".claude/.workshop-manifest" || -f ".codex/the-workshop/.workshop-manifest" ]]; then
     SCOPE="project"
-    TARGET_BASE=".claude"
   else
     SCOPE="user"
-    TARGET_BASE="$HOME/.claude"
+  fi
+fi
+set_targets
+
+if [[ -z "$RUNTIME" ]]; then
+  detected=()
+  [[ -f "$CLAUDE_TARGET_BASE/.workshop-manifest" ]] && detected+=("claude")
+  [[ -f "$CODEX_TARGET_BASE/.workshop-manifest" ]] && detected+=("codex")
+  if [[ "${#detected[@]}" -eq 0 ]]; then
+    RUNTIME="claude"
+  elif [[ "${#detected[@]}" -eq 2 ]]; then
+    RUNTIME="both"
+  else
+    RUNTIME="${detected[0]}"
   fi
 fi
 
-# A missing manifest just means there's nothing to diff against for pruning
-# (e.g. an older pre-manifest install). install.sh will write a fresh manifest
-# and subsequent updates will prune normally.
-HAD_PREV_MANIFEST=0
-PREV_MANIFEST="$(mktemp)"
-trap 'rm -f "$PREV_MANIFEST"' EXIT
-if [[ -f "$TARGET_BASE/.workshop-manifest" ]]; then
-  HAD_PREV_MANIFEST=1
-  grep -v '^#' "$TARGET_BASE/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$PREV_MANIFEST"
-fi
-
-PREV_VERSION="unknown"
-if [[ -f "$TARGET_BASE/.workshop-version" ]]; then
-  PREV_VERSION="$(tr -d '[:space:]' < "$TARGET_BASE/.workshop-version")"
-fi
-
-# Always shallow-clone the latest main from origin. update.sh is by
-# definition "pull latest from upstream" — running it from a stale local
-# clone and reinstalling the same stale files would silently no-op.
 if ! command -v git >/dev/null 2>&1; then
   echo "git is required to update the-workshop. Install git and re-run." >&2
   exit 1
 fi
 
 CLONE_TMP="$(mktemp -d)"
-trap 'rm -f "$PREV_MANIFEST"; rm -rf "$CLONE_TMP"' EXIT
+trap 'rm -rf "$CLONE_TMP"' EXIT
 echo "Fetching latest the-workshop..."
 git clone --depth=1 "$REPO_URL" "$CLONE_TMP/repo" --quiet
 INSTALL_SH="$CLONE_TMP/repo/install.sh"
 
-echo "Updating from version $PREV_VERSION..."
-echo ""
+runtime_target() {
+  case "$1" in
+    claude) printf '%s\n' "$CLAUDE_TARGET_BASE" ;;
+    codex) printf '%s\n' "$CODEX_TARGET_BASE" ;;
+    *) echo "Unknown runtime: $1" >&2; exit 1 ;;
+  esac
+}
 
-# Run install.sh in the resolved scope. It overwrites files (silent overwrite
-# by design) and writes a fresh manifest.
-bash "$INSTALL_SH" "--$SCOPE"
+allowed_re_for() {
+  case "$1" in
+    claude) printf '%s\n' '^(commands|agents)/[A-Za-z0-9._-]+\.md$|^hooks/[A-Za-z0-9._-]+\.sh$' ;;
+    codex) printf '%s\n' '^(skills|agents|core)(/[A-Za-z0-9._-]+)+\.md$|^WORKSHOP\.md$' ;;
+    *) echo "Unknown runtime: $1" >&2; exit 1 ;;
+  esac
+}
 
-# Diff old manifest vs new. Anything in old-but-not-new was removed upstream
-# and should be pruned from the install target. Skip entirely when there was
-# no previous manifest — nothing to diff against.
-PRUNED=0
-SKIPPED=0
-if [[ "$HAD_PREV_MANIFEST" -eq 1 ]]; then
-  NEW_MANIFEST="$(mktemp)"
-  trap 'rm -f "$PREV_MANIFEST" "$NEW_MANIFEST"; rm -rf "$CLONE_TMP"' EXIT
-  grep -v '^#' "$TARGET_BASE/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$NEW_MANIFEST"
+update_one() {
+  local runtime="$1"
+  local target_base
+  target_base="$(runtime_target "$runtime")"
+  local prev_manifest new_manifest
+  prev_manifest="$(mktemp)"
+  new_manifest="$(mktemp)"
+  local had_prev=0
+  local prev_version="unknown"
+  local pruned=0
+  local skipped=0
 
-  # Only allow pruning of paths matching known install shapes. A tampered
-  # manifest containing .., absolute paths, or anything outside this shape
-  # is rejected outright — never trust manifest-supplied paths for rm.
-  ALLOWED_RE='^(commands|agents)/[A-Za-z0-9._-]+\.md$|^hooks/[A-Za-z0-9._-]+\.sh$'
-  while IFS= read -r relpath; do
-    [[ -z "$relpath" ]] && continue
-    if [[ ! "$relpath" =~ $ALLOWED_RE ]]; then
-      echo "  skipped: $relpath (manifest entry outside expected shape; not pruning)" >&2
-      SKIPPED=$((SKIPPED + 1))
-      continue
-    fi
-    full="$TARGET_BASE/$relpath"
-    if [[ -f "$full" ]]; then
-      rm -f "$full"
-      echo "  pruned: $relpath (no longer in upstream)"
-      PRUNED=$((PRUNED + 1))
-    fi
-  done < <(comm -23 "$PREV_MANIFEST" "$NEW_MANIFEST")
-fi
+  if [[ -f "$target_base/.workshop-manifest" ]]; then
+    had_prev=1
+    grep -v '^#' "$target_base/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$prev_manifest"
+  fi
+  if [[ -f "$target_base/.workshop-version" ]]; then
+    prev_version="$(tr -d '[:space:]' < "$target_base/.workshop-version")"
+  fi
 
-NEW_VERSION="$(tr -d '[:space:]' < "$TARGET_BASE/.workshop-version" 2>/dev/null || echo unknown)"
+  echo "Updating $runtime adapter from version $prev_version..."
+  echo ""
+  bash "$INSTALL_SH" "--$SCOPE" "--$runtime"
 
-echo ""
-if [[ "$PRUNED" -gt 0 ]]; then
-  echo "Pruned $PRUNED file(s) that were removed upstream."
-fi
-if [[ "$SKIPPED" -gt 0 ]]; then
-  echo "Skipped $SKIPPED manifest entr(y/ies) that fell outside the expected shape — see warnings above." >&2
-fi
-echo "Update complete: $PREV_VERSION → $NEW_VERSION ($SCOPE scope)."
+  if [[ "$had_prev" -eq 1 ]]; then
+    grep -v '^#' "$target_base/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$new_manifest"
+    local allowed_re
+    allowed_re="$(allowed_re_for "$runtime")"
+    while IFS= read -r relpath; do
+      [[ -z "$relpath" ]] && continue
+      if [[ ! "$relpath" =~ $allowed_re ]]; then
+        echo "  skipped: $relpath (manifest entry outside expected $runtime shape; not pruning)" >&2
+        skipped=$((skipped + 1))
+        continue
+      fi
+      local full="$target_base/$relpath"
+      if [[ -f "$full" ]]; then
+        rm -f "$full"
+        echo "  pruned: $relpath (no longer in upstream)"
+        pruned=$((pruned + 1))
+      fi
+    done < <(comm -23 "$prev_manifest" "$new_manifest")
+  fi
+
+  local new_version
+  new_version="$(tr -d '[:space:]' < "$target_base/.workshop-version" 2>/dev/null || echo unknown)"
+  echo ""
+  [[ "$pruned" -gt 0 ]] && echo "Pruned $pruned $runtime file(s) that were removed upstream."
+  [[ "$skipped" -gt 0 ]] && echo "Skipped $skipped $runtime manifest entr(y/ies) outside the expected shape." >&2
+  echo "Update complete: $prev_version → $new_version ($SCOPE scope, $runtime)."
+  echo ""
+  rm -f "$prev_manifest" "$new_manifest"
+}
+
+case "$RUNTIME" in
+  claude) update_one claude ;;
+  codex) update_one codex ;;
+  both) update_one claude; update_one codex ;;
+  *) echo "Unknown runtime: $RUNTIME" >&2; exit 1 ;;
+esac

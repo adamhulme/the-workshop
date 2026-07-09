@@ -1,5 +1,7 @@
 ## Workshop conventions
 
+> Shared runtime-neutral workshop instructions now live in `WORKSHOP.md` and `core/`. This file remains the Claude Code adapter: keep Claude-specific mechanics here and put cross-runtime doctrine in `WORKSHOP.md`.
+
 This project uses [the workshop's](https://github.com/adamhulme/the-workshop) folder convention for compounding artefacts:
 
 - `docs/research/` — source material (interviews, context, prior art). Use `/research` to add.

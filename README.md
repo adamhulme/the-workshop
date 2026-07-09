@@ -1,14 +1,14 @@
 # the-workshop
 
-> My personal touch on Compound Engineering — Claude Code skills and folder conventions so every task leaves an artifact that compounds.
+> My personal touch on Compound Engineering — shared workshop conventions plus Claude Code and Codex adapters so every task leaves an artifact that compounds.
 
 ## What this is
 
-An opinionated, harness-aware playbook for [Compound Engineering](https://every.to/guides/compound-engineering). It picks Claude Code as the runtime, commits to a folder convention for compounding artifacts, and ships those conventions as runnable slash commands you can copy in and use today.
+An opinionated, harness-aware playbook for [Compound Engineering](https://every.to/guides/compound-engineering). The durable doctrine now lives in runtime-neutral `core/` specs, with Claude Code adapters in `commands/` and `agents/`, and Codex adapters in `codex/skills/` and `codex/agents/`.
 
 ## What this isn't
 
-- A tool-agnostic manifesto. It picks Claude Code and goes.
+- A lowest-common-denominator prompt dump. The core doctrine is shared, but each runtime keeps native adapters instead of pretending Claude and Codex have identical mechanics.
 - An exhaustive framework. It ships what's lived-in; new skills land as the practice produces them.
 - A community project. It's a personal canon. Fork freely.
 
@@ -19,13 +19,27 @@ Clone the repo and run the installer:
 ```bash
 git clone https://github.com/adamhulme/the-workshop.git
 cd the-workshop
-./install.sh                # user-scoped → ~/.claude/{commands,agents}/
-./install.sh --project      # project-scoped → ./.claude/{commands,agents}/
+./install.sh                         # Claude user scope → ~/.claude/{commands,agents,hooks}/
+./install.sh --project               # Claude project scope → ./.claude/{commands,agents,hooks}/
+./install.sh --codex                 # Codex user scope → ~/.codex/the-workshop/
+./install.sh --project --codex       # Codex project scope → ./.codex/the-workshop/
+./install.sh --both                  # install both runtime adapters
 ```
 
-Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after install — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool.
+Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after installing the Claude adapter — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool. Point Codex sessions at the installed `WORKSHOP.md`, `skills/`, `agents/`, and `core/` directories for the Codex adapter.
 
-`install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into the install target so that `update.sh` can later diff cleanly against upstream and prune skills the workshop has removed.
+`install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into each runtime install target so that `update.sh` can later diff cleanly against upstream and prune files that runtime adapter has removed.
+
+
+## Runtime support model
+
+| Layer | Path | Purpose | Runtime coupling |
+|-------|------|---------|------------------|
+| Shared canon | [`core/`](core/) and [`WORKSHOP.md`](WORKSHOP.md) | Artifact conventions, workflow contracts, and reviewer rubrics | Runtime-neutral |
+| Claude adapter | [`commands/`](commands/), [`agents/`](agents/), [`CLAUDE.md`](CLAUDE.md) | Claude Code slash commands, agent frontmatter, hooks, and `.claude` install layout | Claude-native |
+| Codex adapter | [`codex/skills/`](codex/skills/), [`codex/agents/`](codex/agents/) | Codex-friendly task playbooks and reviewer roles derived from the shared canon | Codex-native |
+
+The migration strategy is deliberately hybrid: shared ideas live once in `core/`, while orchestration-heavy workflows get native Claude and Codex adapters. Avoid adding new cross-runtime doctrine directly to `commands/` or `codex/`; put it in `core/` first, then adapt it.
 
 ## Optional integrations
 
@@ -38,7 +52,7 @@ The workshop runs without any of these. Each one unlocks a specific capability �
 | **`gh` CLI** authenticated | Read PR titles/bodies and unresolved review threads on the current branch. Skills skip the relevant pass if missing. | `/triage` (PR-comment sweep), `/changelog` (PR enrichment) |
 | [**Playwright MCP**](https://github.com/microsoft/playwright-mcp) (or Chrome DevTools MCP) configured in Claude Code | Drive a visible browser to verify changes or walk a user flow. Without it, `/browse` prints a setup snippet and exits. | `/browse` (headed sessions, `--setup` for credential storage state) |
 
-None are hard dependencies — the workshop is opinionated about Claude Code as the runtime, not about which model you bring as a second voice or which issue tracker you use. Install the ones that match your workflow.
+None are hard dependencies. The Claude adapter uses these integrations where available; Codex adapter files should map the same workflow intent onto whatever connectors are available in a Codex session. Install the integrations that match your workflow.
 
 ## Starter guide — your first run
 
@@ -180,7 +194,7 @@ focus: Dashboard usage patterns
 
 Why this shape: future skills (synthesis, brainstorming) can scan many interviews and pull structured `### Insight:` blocks without parsing prose. Frontmatter makes filtering by participant or focus area trivial.
 
-## Skills shipped
+## Claude skills shipped
 
 | Command | What it does |
 |---------|--------------|
@@ -202,13 +216,29 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/auto-do`](commands/auto-do.md) | Autonomous task runner. Chains `/plan` → `/plan-eng-review` (+ `/plan-design-review` when UI is touched) → implementation → `/solution` → PR creation → `/browse` verification (when applicable) → `/review-pr`, applying a documented auto-decision policy at every gate. Creates and reviews a PR but never merges — the merge gate stays human. Every auto-pick lands in the PR body's `## Auto-decisions` section for auditing. Stops on dirty tree, missing `gh`, complexity smell, test failure, or round-2 must-fix (PR converted to draft). |
 | [`/auto-fleet`](commands/auto-fleet.md) | Autonomous fleet runner. Reads a user-authored manifest at `docs/fleet/<slug>.md` and dispatches `/auto-do` per row in **parallel waves** (v1: `--max-parallel=N`, default 3, ceiling 5). Each row runs in its own git worktree at `.claude/auto-fleet/wt-<slug>-<id>/`. **Declared dependencies** (`depends_on` column) are dispatch-ordering only — children's branches are created off the default branch's pinned SHA, NOT off parent branches; if your task needs parent code in the child, split into multiple sequential fleets or wait for v2's epic-branch mode. **Cascade-block** on failure: when a parent fails, its dependents become `blocked`; other parallel branches continue. Hard cap of 10 queued rows per run. Backward-compatible with v0.1 manifests (no `depends_on` column). The fleet branch (`fleet/<slug>`) is a control plane that holds only the manifest and is never merged; subtask PRs target the default branch independently. SHA-256 hash check halts cleanly if the manifest is edited externally during a run. Failed-row worktrees preserved on disk for debugging. **v1 contract**: `/auto-do` must be runnable in a fresh checkout of the default branch (worktrees inherit only tracked files; no `.env` / `node_modules` / virtualenvs). |
 
-## Agents shipped
+## Claude agents shipped
 
 | Agent | What it does |
 |-------|--------------|
 | [`code-archaeologist`](agents/code-archaeologist.md) | Read-only investigator. Traces a feature, function, or symbol across the codebase: where it's defined, where it's called, what depends on it, who introduced it, what caveats exist. Does not propose changes. Useful from any skill that needs to ground itself in current code reality. |
 | [`decision-distiller`](agents/decision-distiller.md) | Distils messy multi-thread discussion (PR threads, meeting notes, Jira/Confluence pages, transcripts) into ADR-shaped markdown — the question, options considered, trade-offs, chosen path, dissenting views. Cites every claim. Pairs well with `/solution` and `/brainstorm` — dispatchable from any skill, or directly from your own review of a long discussion. |
 | [`pr-reviewer`](agents/pr-reviewer.md) | Independent diff reviewer using a fixed rubric: correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup. Groups findings by 'must fix before merge / should fix in this PR / follow-up'. Direct rather than diplomatic. |
+
+## Codex adapter shipped
+
+| Codex path | What it adapts |
+|------------|----------------|
+| [`codex/skills/plan.md`](codex/skills/plan.md) | Runtime-neutral planning without Claude plan-mode or `AskUserQuestion` mechanics. |
+| [`codex/skills/solution.md`](codex/skills/solution.md) | Solution lifecycle capture under `docs/solutions/`. |
+| [`codex/skills/research.md`](codex/skills/research.md) | Structured research notes with Codex-available connectors or paste fallback. |
+| [`codex/skills/review-pr.md`](codex/skills/review-pr.md) | Codex-native PR review using the shared rubrics. |
+| [`codex/skills/auto-do.md`](codex/skills/auto-do.md) | Codex-native autonomous task runner contract. |
+| [`codex/skills/auto-fleet.md`](codex/skills/auto-fleet.md) | Codex-native fleet runner contract, to use after Codex `auto-do` is stable. |
+| [`codex/agents/`](codex/agents/) | Codex reviewer and investigator roles backed by `core/rubrics/`. |
+
+## Compatibility matrix
+
+See [`core/workflows/compatibility-matrix.md`](core/workflows/compatibility-matrix.md) for the per-workflow migration class: portable, adapter-required, native-rewrite, or personal-template.
 
 ## Credit and departure
 
@@ -220,7 +250,7 @@ The seed comes from Every's [Compound Engineering guide](https://every.to/guides
 
 What's different here:
 
-- **Harness-opinionated.** Built around Claude Code's slash commands and skills.
+- **Harness-opinionated, not harness-confused.** Shared doctrine is runtime-neutral, while Claude and Codex keep native adapters for their different execution models.
 - **Inputs get equal treatment.** A dedicated `docs/research/` subtree for source material — interviews, product context — with a structured format. The article focuses on outputs.
 - **Ships as runnable code.** Every recommendation maps to a file you can install.
 
