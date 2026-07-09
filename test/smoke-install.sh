@@ -40,8 +40,14 @@ if [[ "$(wc -l < "$SCRATCH/.claude/.workshop-manifest")" -eq "$claude_manifest_l
 else
   fail "re-running install.sh changed claude manifest line count"
 fi
+if [[ "$(wc -l < "$SCRATCH/.codex/the-workshop/.workshop-manifest")" -eq "$codex_manifest_lines" ]]; then
+  pass "re-running install.sh is idempotent (codex manifest line count stable)"
+else
+  fail "re-running install.sh changed codex manifest line count"
+fi
 
-# --- update.sh prune allowlist + traversal guard (pure-function checks) ---
+# --- update.sh prune allowlist + traversal + symlink-escape guards (pure-function checks) ---
+eval "$(sed -n '/^resolves_within/,/^}/p' "$REPO_ROOT/update.sh")"
 eval "$(sed -n '/^has_dotdot_segment/,/^}/p' "$REPO_ROOT/update.sh")"
 eval "$(sed -n '/^allowed_re_for/,/^}/p' "$REPO_ROOT/update.sh")"
 
@@ -64,6 +70,24 @@ check_allowed codex "agents/../../../root/.ssh/authorized_keys.md" block
 check_allowed claude "commands/plan.md" allow
 check_allowed claude "hooks/diet-read.sh" allow
 check_allowed claude "commands/../../../etc/passwd" block
+
+# --- resolves_within: symlinked intermediate directory can't escape target_base ---
+SYMLINK_TEST="$(mktemp -d)"
+trap 'rm -rf "$SCRATCH" "$SYMLINK_TEST"' EXIT
+mkdir -p "$SYMLINK_TEST/target/core/workflows" "$SYMLINK_TEST/outside"
+touch "$SYMLINK_TEST/target/core/workflows/legit.md" "$SYMLINK_TEST/outside/evil.md"
+if resolves_within "$SYMLINK_TEST/target/core/workflows/legit.md" "$SYMLINK_TEST/target"; then
+  pass "resolves_within: ordinary nested path stays inside target_base"
+else
+  fail "resolves_within: ordinary nested path incorrectly rejected"
+fi
+rm -rf "$SYMLINK_TEST/target/core"
+ln -s "$SYMLINK_TEST/outside" "$SYMLINK_TEST/target/core"
+if resolves_within "$SYMLINK_TEST/target/core/evil.md" "$SYMLINK_TEST/target"; then
+  fail "resolves_within: symlinked directory escaped target_base undetected"
+else
+  pass "resolves_within: symlinked directory correctly blocked from escaping target_base"
+fi
 
 echo ""
 if [[ "$FAILURES" -eq 0 ]]; then

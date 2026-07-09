@@ -110,6 +110,17 @@ allowed_re_for() {
   esac
 }
 
+resolves_within() {
+  local full="$1" base="$2"
+  local resolved_dir resolved_base
+  resolved_dir="$(cd "$(dirname "$full")" 2>/dev/null && pwd -P)" || return 1
+  resolved_base="$(cd "$base" 2>/dev/null && pwd -P)" || return 1
+  case "$resolved_dir" in
+    "$resolved_base"|"$resolved_base"/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 has_dotdot_segment() {
   local relpath="$1" seg
   IFS='/' read -ra segs <<< "$relpath"
@@ -156,9 +167,14 @@ update_one() {
       fi
       local full="$target_base/$relpath"
       if [[ -f "$full" ]]; then
-        rm -f "$full"
-        echo "  pruned: $relpath (no longer in upstream)"
-        pruned=$((pruned + 1))
+        if resolves_within "$full" "$target_base"; then
+          rm -f "$full"
+          echo "  pruned: $relpath (no longer in upstream)"
+          pruned=$((pruned + 1))
+        else
+          echo "  skipped: $relpath (resolves outside install target via symlink; not pruning)" >&2
+          skipped=$((skipped + 1))
+        fi
       fi
     done < <(comm -23 "$prev_manifest" "$new_manifest")
   fi
