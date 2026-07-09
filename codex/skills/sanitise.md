@@ -1,6 +1,6 @@
 # Codex skill: sanitise
 
-Shared contract: `core/workflows/artifact-conventions.md`
+Shared contract: `core/workflows/sanitise.md`
 
 ## Use when
 

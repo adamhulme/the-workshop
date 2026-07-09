@@ -1,5 +1,30 @@
 # TODOs
 
+## Review findings — 2026-07-09 (PR #32, runtime-neutral core + Codex adapter)
+
+Round 1 review by Codex CLI, `pr-reviewer`, `security-reviewer`, `performance-reviewer`, and `compound-reviewer` in parallel. 4 must-fix and 6 should-fix items addressed inline (per user direction to fix both tiers this round). The following items are genuinely deferred.
+
+### Deferred — Codex adapter porting
+
+Per `core/workflows/compatibility-matrix.md`, the following are not yet ported to Codex and have no tracking beyond that table's prose:
+
+- **`native-rewrite` workflows**: `review-pr` (Codex-native reviewer orchestration — shipped as a skill but not yet Codex-native per the matrix's own classification), `auto-do` (Codex-native autonomous runner), `auto-fleet` (explicitly "port after Codex `auto-do`" — ordering dependency).
+- **`adapter-required` workflows still unmapped for Codex**: `init-workshop`, `research` connector mapping beyond the paste fallback, `team-init` memory-file target, `plan-eng-review`/`plan-design-review` review-criteria mapping, `browse` browser/storage tool mapping.
+- **`sanitise` config-path generalization** — `codex/skills/sanitise.md`'s porting note says to prefer a runtime-neutral config path (e.g. `.workshop/sanitise/`) instead of hard-coding `.claude`; not yet implemented, still points at the Claude-only `~/.claude/workshop/` path from `commands/sanitise.md`.
+- **`personal-template` workflows** (`start-day`, `end-day`) — explicitly deferred until parameterized; do not port as-is.
+
+### Should fix (deferred)
+
+- **One-directional `core/` linking** — `commands/*.md` (Claude adapter) don't cite their `core/workflows/*.md` counterparts the way `codex/skills/*.md` do; noted in `core/README.md` under "Known gap: one-directional linking." Fixing this means adding a backlink to each of the ~14 touched `commands/*.md` files — deferred as its own follow-up PR rather than bundled into this review pass. *(compound-reviewer)*
+
+### Follow-up
+
+- **`install.sh:71-77`** — dead top-level var/array declarations (`cmd_count`, `agent_count`, `hook_count`, `codex_skill_count`, `codex_agent_count`, `core_count`, `MANIFEST_LINES=()`) immediately re-initialized inside `install_claude()`/`install_codex()` before use. Leftover from the refactor. *(pr-reviewer)*
+- **`codex/agents/*.md`** — 8 near-identical 16-line template files with no shared home; a future edit to the shared 6-step instructions needs 8 manual edits with nothing to remind the author to keep them in sync. *(pr-reviewer)*
+- **Naming inconsistency** — Claude command is `/browse`, its core/Codex counterpart is `browser-verification`; only discoverable via the compatibility matrix. *(pr-reviewer)*
+- **`update.sh` file mode** — changed `100644` → `100755` in this diff with no mention in the PR description. Confirm intentional (script needs `+x` to run directly) and note it next time rather than let it pass silently. *(pr-reviewer)*
+- **No YAML frontmatter on `core/`/`codex/` markdown** — unlike `docs/*.md`'s `tags:`/`category:` convention. May be intentional (spec files vs. task artifacts) but the decision hasn't been made explicitly. *(compound-reviewer)*
+
 ## Review findings — 2026-05-22 (PR #30, /start-day + /end-day)
 
 Round 1 review by Codex CLI, pr-reviewer, and compound-reviewer in parallel. 3 must-fix items addressed inline; the following should-fix and follow-up items are deferred.

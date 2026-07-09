@@ -21,13 +21,20 @@ Use the shared artifact paths from `core/workflows/artifact-conventions.md`:
 
 ## Coding philosophy
 
-- Simplest fit wins.
-- Readability beats cleverness.
-- Prefer editing existing files over adding new ones when the existing file is the right home.
-- Stay in scope.
-- Ask explicitly at meaningful decision points.
-- Do not add defensive machinery for impossible internal cases; validate real boundaries.
+This is the canonical text. Runtime adapters (`CLAUDE.md`, Codex's own instruction file) mirror it verbatim so it loads automatically in each harness — keep both in sync when editing here.
+
+- **Simplest fit wins.** Solutions match the scope. No premature abstractions, no design for hypothetical futures.
+- **Readability over cleverness.** Names should make comments unnecessary. Comments are for **why**, not what.
+- **Edit before adding.** Prefer modifying an existing file over creating a new one; new files only when nothing existing fits.
+- **Stay in scope.** One idea per change. Drop unrelated findings in a triageable follow-up location instead of bundling them in.
+- **Ask explicitly at meaningful decision points.** Use each runtime's structured-question mechanism rather than a trailing prose `(y/n)` prompt.
+- **Don't add what wasn't asked.** No defensive machinery for impossible internal cases; validate real boundaries (user input, external APIs), not internal callers.
 
 ## Learned principles
 
-Add broadly reusable principles here when they should guide both Claude and Codex. Runtime-specific lessons may remain in the corresponding adapter instructions.
+Principles and prevention strategies extracted from shipped work, broadly reusable across runtimes. Runtime-specific lessons may remain in the corresponding adapter instructions instead.
+
+- **Zero-dependency hooks.** Hook scripts that ship to arbitrary environments must parse with bash builtins only (`grep`/`sed`/parameter expansion). External tools (`jq`, `python`, `node`) may not exist on the target system. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
+- **Layered reduction beats single-mechanism.** Multiple complementary mechanisms at different activation costs (always-on directives, opt-in modes, automated enforcement) compound better than one aggressive approach. Each layer catches what the others miss. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
+
+<!-- Add new principles above this line. -->

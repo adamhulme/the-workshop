@@ -1,6 +1,6 @@
 # Codex skill: consult
 
-Shared contract: `core/workflows/artifact-conventions.md`
+Shared contract: `core/workflows/consult.md`
 
 ## Use when
 

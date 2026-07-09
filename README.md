@@ -146,7 +146,7 @@ What it does:
 
 - **Always shallow-clones the latest `main` from origin** into a temp dir before installing — even when run from a local clone. A stale checkout never reinstalls itself. (If you want to install from a local checkout, run `install.sh` directly.)
 - Overwrites installed skill files (silent overwrite — if you've edited a skill locally, fork it before updating).
-- Diffs the previous manifest against the new one and **prunes** any skill that was installed by an earlier release but is no longer shipped. Manifest entries are validated against the expected `commands/*.md` or `agents/*.md` shape before any `rm`; anything outside that shape is logged and skipped, so a tampered manifest cannot be coerced into deleting files outside the install target. Files the workshop never installed are left alone.
+- Diffs the previous manifest against the new one and **prunes** any file that was installed by an earlier release but is no longer shipped. Manifest entries are validated against the expected shape for the runtime being updated — `commands/*.md`/`agents/*.md`/`hooks/*.sh` for Claude, `skills/*.md`/`agents/*.md`/`core/**/*.md`/`WORKSHOP.md` for Codex — before any `rm`, rejecting `.`/`..` path segments so a tampered manifest cannot be coerced into deleting files outside the install target. Files the workshop never installed are left alone.
 - Reports the version transition (`Update complete: 0.1.0 → 0.2.0 (user scope).`).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each release. The current version is in [VERSION](VERSION).
@@ -234,6 +234,13 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`codex/skills/review-pr.md`](codex/skills/review-pr.md) | Codex-native PR review using the shared rubrics. |
 | [`codex/skills/auto-do.md`](codex/skills/auto-do.md) | Codex-native autonomous task runner contract. |
 | [`codex/skills/auto-fleet.md`](codex/skills/auto-fleet.md) | Codex-native fleet runner contract, to use after Codex `auto-do` is stable. |
+| [`codex/skills/browser-verification.md`](codex/skills/browser-verification.md) | Codex-native visible-browser verification and research capture. |
+| [`codex/skills/brainstorm.md`](codex/skills/brainstorm.md) | Four-lens ideation, grounded in `docs/research/`. |
+| [`codex/skills/changelog.md`](codex/skills/changelog.md) | Changelog synthesis from recent merges. |
+| [`codex/skills/consult.md`](codex/skills/consult.md) | Persona-team consultation with surfaced disagreement. |
+| [`codex/skills/design-capture.md`](codex/skills/design-capture.md) | Existing-app design system capture into `DESIGN.md`. |
+| [`codex/skills/sanitise.md`](codex/skills/sanitise.md) | Pre-publish denylist + LLM scan for client/internal references. |
+| [`codex/skills/triage.md`](codex/skills/triage.md) | Inbox sweep (`todos/`, PR comments, issue tracker) ranked by leverage. |
 | [`codex/agents/`](codex/agents/) | Codex reviewer and investigator roles backed by `core/rubrics/`. |
 
 ## Compatibility matrix

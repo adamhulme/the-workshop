@@ -1,6 +1,6 @@
 # Codex skill: triage
 
-Shared contract: `core/workflows/artifact-conventions.md`
+Shared contract: `core/workflows/triage.md`
 
 ## Use when
 

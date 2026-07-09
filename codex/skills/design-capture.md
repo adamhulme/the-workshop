@@ -1,6 +1,6 @@
 # Codex skill: design-capture
 
-Shared contract: `core/rubrics/design-plan-reviewer.md`
+Shared contract: `core/workflows/design-capture.md`
 
 ## Use when
 

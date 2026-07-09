@@ -110,6 +110,15 @@ allowed_re_for() {
   esac
 }
 
+has_dotdot_segment() {
+  local relpath="$1" seg
+  IFS='/' read -ra segs <<< "$relpath"
+  for seg in "${segs[@]}"; do
+    [[ "$seg" == "." || "$seg" == ".." ]] && return 0
+  done
+  return 1
+}
+
 update_one() {
   local runtime="$1"
   local target_base
@@ -140,7 +149,7 @@ update_one() {
     allowed_re="$(allowed_re_for "$runtime")"
     while IFS= read -r relpath; do
       [[ -z "$relpath" ]] && continue
-      if [[ ! "$relpath" =~ $allowed_re ]]; then
+      if [[ ! "$relpath" =~ $allowed_re ]] || has_dotdot_segment "$relpath"; then
         echo "  skipped: $relpath (manifest entry outside expected $runtime shape; not pruning)" >&2
         skipped=$((skipped + 1))
         continue

@@ -1,6 +1,6 @@
 # Codex skill: changelog
 
-Shared contract: `core/workflows/artifact-conventions.md`
+Shared contract: `core/workflows/changelog.md`
 
 ## Use when
 

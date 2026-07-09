@@ -1,6 +1,6 @@
 ## Workshop conventions
 
-> Shared runtime-neutral workshop instructions now live in `WORKSHOP.md` and `core/`. This file remains the Claude Code adapter: keep Claude-specific mechanics here and put cross-runtime doctrine in `WORKSHOP.md`.
+> `WORKSHOP.md` holds the canonical cross-runtime doctrine (mirrored below so it auto-loads for Claude Code) and `core/` holds the portable per-workflow contracts. This file remains the Claude Code adapter: keep Claude-specific mechanics here, and when editing shared doctrine, update `WORKSHOP.md` first.
 
 This project uses [the workshop's](https://github.com/adamhulme/the-workshop) folder convention for compounding artefacts:
 
@@ -18,6 +18,8 @@ Write artefacts to these locations rather than scattering them. Prefer the works
 Projects can scaffold a six-persona consultation team via `/team-init` and consult it via `/consult <question>`. Personas live at `teams/<slug>/` (or an umbrella path); `team.yaml` controls speaking order and decision protocol. `/plan-eng-review` and `/plan-design-review` provide single-perspective plan critique without needing a team.
 
 ## Coding philosophy
+
+Mirrors the canonical text in `WORKSHOP.md` so it loads automatically for Claude Code — keep both in sync when editing either.
 
 The workshop ships opinionated tools, written in opinionated style. When writing or reviewing code in this repo:
 
@@ -38,7 +40,7 @@ These directives reduce context window consumption without losing technical accu
 
 ## Learned principles
 
-Principles and prevention strategies extracted from shipped work. Each links to its source solution. `/solution` prompts for extraction at the outcome stage — asking what worked, what didn't, and whether the system would catch it next time.
+Mirrors `WORKSHOP.md`'s Learned principles — keep both in sync. Each links to its source solution. `/solution` prompts for extraction at the outcome stage — asking what worked, what didn't, and whether the system would catch it next time.
 
 - **Zero-dependency hooks.** Hook scripts that ship to arbitrary environments must parse with bash builtins only (`grep`/`sed`/parameter expansion). External tools (`jq`, `python`, `node`) may not exist on the target system. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
 - **Layered reduction beats single-mechanism.** Multiple complementary mechanisms at different activation costs (always-on directives, opt-in modes, automated enforcement) compound better than one aggressive approach. Each layer catches what the others miss. *(from docs/solutions/token-efficiency.md, 2026-05-07)*

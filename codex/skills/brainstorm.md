@@ -1,6 +1,6 @@
 # Codex skill: brainstorm
 
-Shared contract: `core/workflows/artifact-conventions.md`
+Shared contract: `core/workflows/brainstorm.md`
 
 ## Use when
 
