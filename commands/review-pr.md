@@ -73,9 +73,9 @@ In a single message, dispatch the selected agents in parallel:
 
 - **Codex review (Bash)** (always): `codex exec --skip-git-repo-check "<rubric prompt>"`. Pipe or embed the diff. Same five-dimension rubric as `pr-reviewer` (correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup). Ask Codex for structured output: `file:line | category | severity | finding`.
 - **pr-reviewer subagent** (always): `Agent` tool with `subagent_type: pr-reviewer`. Prompt includes the diff and the same rubric.
-- **security-reviewer subagent** (conditional): `Agent` tool with `subagent_type: security-reviewer`. Prompt includes the diff. Reviews injection, auth/authz, secrets, path traversal, crypto, dependency risk.
-- **performance-reviewer subagent** (conditional): `Agent` tool with `subagent_type: performance-reviewer`. Prompt includes the diff. Reviews queries, caching, algorithmic complexity, memory, token/API cost.
-- **compound-reviewer subagent** (conditional): `Agent` tool with `subagent_type: compound-reviewer`. Prompt includes the diff. Reviews whether the work closes the compounding loop — solution docs, principle extraction, prevention strategies, artifact tagging, deferred work visibility.
+- **security-reviewer subagent** (conditional): `Agent` tool with `subagent_type: security-reviewer`, `model: "sonnet"`. Prompt includes the diff. Reviews injection, auth/authz, secrets, path traversal, crypto, dependency risk.
+- **performance-reviewer subagent** (conditional): `Agent` tool with `subagent_type: performance-reviewer`, `model: "sonnet"`. Prompt includes the diff. Reviews queries, caching, algorithmic complexity, memory, token/API cost.
+- **compound-reviewer subagent** (conditional): `Agent` tool with `subagent_type: compound-reviewer`, `model: "sonnet"`. Prompt includes the diff. Reviews whether the work closes the compounding loop — solution docs, principle extraction, prevention strategies, artifact tagging, deferred work visibility.
 
 If `codex` is not on PATH, fall back to a `general-purpose` Agent for the Codex slot. If any specialized reviewer agent is missing, fall back to `general-purpose` prompted with that agent's rubric summary.
 
@@ -170,7 +170,7 @@ Never use `--force`, `--force-with-lease`, or `--no-verify`.
 Single re-review by **Codex only**. Reasoning: `pr-reviewer` saw the pre-fix diff; main-thread Claude just implemented; Codex's previous round was on the pre-fix code. Codex is the only voice that hasn't seen the new state.
 
 - One Codex call: `codex exec --skip-git-repo-check` on the new diff (`gh pr diff <n>` again, or `git diff <default>...HEAD`). Focused prompt: "The previous review's must-fix items have been addressed. Check for **regressions**, **missed cases**, and **new issues introduced by the fix**. Same five-dimension rubric. Be terse."
-- If Codex isn't on PATH, fall back to a `general-purpose` Agent for round 2.
+- If Codex isn't on PATH, fall back to a `general-purpose` Agent with `model: "sonnet"` for round 2.
 
 Outcomes:
 

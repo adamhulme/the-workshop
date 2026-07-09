@@ -179,16 +179,7 @@ codex exec --skip-git-repo-check \
 rm -f "$TMPF" "$TMPERR"
 ```
 
-Why this pattern (borrowed from gstack):
-- **Stdin piping** (`-` positional + `< "$TMPF"`) avoids shell argument length limits and quote-escaping breakage on long plans.
-- **`-C "$_REPO_ROOT"`** anchors codex to the repo so it can read project files if needed.
-- **`-s read-only`** sandboxes codex so it can't accidentally edit anything.
-- **`model_reasoning_effort="high"`** is the sweet spot: thorough enough for review work, faster than the default `xhigh` which can hang on big prompts.
-- **`--enable web_search_cached`** lets codex pull in current best practices when relevant.
-- **Stderr capture** surfaces auth failures and timeouts cleanly; users see "run `codex login`" instead of a silent hang.
-- **Cap output at 800 words** in the prompt — keeps codex from generating a 4000-word essay you have to skim.
-
-If `codex` is not on PATH, fall back to an `Agent` call with `subagent_type: general-purpose` and the same prompt body.
+If `codex` is not on PATH, fall back to an `Agent` call with `subagent_type: general-purpose`, `model: "sonnet"`, and the same prompt body.
 
 Present Codex's output verbatim under an `OUTSIDE VOICE (Codex):` header. Surface any disagreements with earlier review findings as `CROSS-MODEL TENSION:` blocks — present both sides neutrally and ask the user to decide. Do not auto-incorporate outside voice findings; the user approves each one.
 
