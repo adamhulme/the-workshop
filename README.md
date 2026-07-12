@@ -32,6 +32,15 @@ Requires `bash` and `git`. On Windows, run from Git Bash or WSL. `--with-codex-p
 
 `install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into each runtime install target so that `update.sh` can later diff cleanly against upstream and prune files that runtime adapter has removed.
 
+`--with-codex-plugin` is an explicit trust decision: it registers the official `openai/codex-plugin-cc` marketplace and tracks its latest published plugin version rather than pinning a commit. The installer verifies the marketplace source before installing or updating. To remove the external state later, use the same scope you installed with:
+
+```bash
+claude plugin uninstall codex@openai-codex --scope user      # or: project
+claude plugin marketplace remove openai-codex --scope user   # or: project
+```
+
+Reverting this repository does not uninstall an already-registered Claude plugin or marketplace.
+
 
 ## Runtime support model
 

@@ -35,4 +35,4 @@ Use the canonical reviewer rubrics in `core/rubrics/`:
 
 ## Adapter notes
 
-Each runtime should implement this natively. Claude may orchestrate reviewer agents and Codex CLI; Codex should not shell out to itself as an outside voice unless that is deliberately useful.
+Each runtime should implement this natively. Claude may orchestrate reviewer agents and should prefer the official Codex plugin before using the direct Codex CLI; every fallback must identify which provider actually ran. Codex should not shell out to itself as an outside voice unless that is deliberately useful.

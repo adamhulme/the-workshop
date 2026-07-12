@@ -46,6 +46,44 @@ else
   fail "re-running install.sh changed codex manifest line count"
 fi
 
+# --- live Claude CLI contract checks (read-only; skip when unavailable) ---
+if command -v claude >/dev/null 2>&1; then
+  CLAUDE_MARKETPLACE_ADD_HELP="$(claude plugin marketplace add --help)"
+  CLAUDE_PLUGIN_UPDATE_HELP="$(claude plugin update --help)"
+  grep -q -- '--scope' <<< "$CLAUDE_MARKETPLACE_ADD_HELP" \
+    && pass "Claude marketplace add supports --scope" \
+    || fail "Claude marketplace add no longer supports --scope"
+  grep -q -- '--scope' <<< "$CLAUDE_PLUGIN_UPDATE_HELP" \
+    && pass "Claude plugin update supports --scope" \
+    || fail "Claude plugin update no longer supports --scope"
+
+  CLAUDE_LIVE_PLUGINS="$(claude plugin list --json 2>/dev/null || printf '[]')"
+  if grep -Fq 'codex@openai-codex' <<< "$CLAUDE_LIVE_PLUGINS"; then
+    CLAUDE_CODEX_DETAILS="$(claude plugin details codex@openai-codex 2>/dev/null || true)"
+    grep -Eq 'Agents \([0-9]+\).*codex-rescue' <<< "$CLAUDE_CODEX_DETAILS" \
+      && pass "installed Codex plugin still exposes codex-rescue" \
+      || fail "installed Codex plugin no longer exposes codex-rescue"
+
+    CLAUDE_CODEX_ROOT="$(node -e 'const fs=require("fs"); const ps=JSON.parse(fs.readFileSync(0,"utf8")); const p=ps.find(x=>x.id==="codex@openai-codex"); if(p) process.stdout.write(p.installPath)' <<< "$CLAUDE_LIVE_PLUGINS")"
+    if command -v cygpath >/dev/null 2>&1 && [[ "$CLAUDE_CODEX_ROOT" =~ ^[A-Za-z]:\\ ]]; then
+      CLAUDE_CODEX_ROOT="$(cygpath -u "$CLAUDE_CODEX_ROOT")"
+    fi
+    if [[ -n "$CLAUDE_CODEX_ROOT" && -f "$CLAUDE_CODEX_ROOT/commands/rescue.md" ]]; then
+      for flag in --wait --fresh --effort; do
+        grep -q -- "$flag" "$CLAUDE_CODEX_ROOT/commands/rescue.md" \
+          && pass "installed Codex rescue command still documents $flag" \
+          || fail "installed Codex rescue command no longer documents $flag"
+      done
+    else
+      fail "installed Codex plugin path or rescue command is unavailable"
+    fi
+  else
+    pass "Codex plugin surface check skipped (plugin not installed)"
+  fi
+else
+  pass "live Claude CLI contract checks skipped (claude unavailable)"
+fi
+
 # --- optional OpenAI Codex plugin install path ---
 MOCK_BIN="$SCRATCH/mock-bin"
 CLAUDE_TEST_LOG="$SCRATCH/claude-plugin-calls.log"
@@ -114,6 +152,24 @@ fi
 eval "$(sed -n '/^resolves_within/,/^}/p' "$REPO_ROOT/update.sh")"
 eval "$(sed -n '/^has_dotdot_segment/,/^}/p' "$REPO_ROOT/update.sh")"
 eval "$(sed -n '/^allowed_re_for/,/^}/p' "$REPO_ROOT/update.sh")"
+eval "$(sed -n '/^install_args_for/,/^}/p' "$REPO_ROOT/update.sh")"
+
+SCOPE="project"
+WITH_CODEX_PLUGIN=1
+UPDATE_INSTALL_ARGS=()
+while IFS= read -r arg; do UPDATE_INSTALL_ARGS+=("$arg"); done < <(install_args_for claude)
+if [[ "${UPDATE_INSTALL_ARGS[*]}" == "--project --claude --with-codex-plugin" ]]; then
+  pass "update.sh forwards --with-codex-plugin to the Claude installer leg"
+else
+  fail "update.sh Claude installer args were: ${UPDATE_INSTALL_ARGS[*]}"
+fi
+UPDATE_INSTALL_ARGS=()
+while IFS= read -r arg; do UPDATE_INSTALL_ARGS+=("$arg"); done < <(install_args_for codex)
+if [[ "${UPDATE_INSTALL_ARGS[*]}" == "--project --codex" ]]; then
+  pass "update.sh does not forward the Claude plugin flag to the Codex leg"
+else
+  fail "update.sh Codex installer args were: ${UPDATE_INSTALL_ARGS[*]}"
+fi
 
 check_allowed() {
   local runtime="$1" relpath="$2" want="$3" re got
@@ -147,7 +203,9 @@ else
 fi
 rm -rf "$SYMLINK_TEST/target/core"
 ln -s "$SYMLINK_TEST/outside" "$SYMLINK_TEST/target/core"
-if resolves_within "$SYMLINK_TEST/target/core/evil.md" "$SYMLINK_TEST/target"; then
+if [[ ! -L "$SYMLINK_TEST/target/core" ]]; then
+  pass "resolves_within: symlink-escape check skipped (native symlinks unavailable)"
+elif resolves_within "$SYMLINK_TEST/target/core/evil.md" "$SYMLINK_TEST/target"; then
   fail "resolves_within: symlinked directory escaped target_base undetected"
 else
   pass "resolves_within: symlinked directory correctly blocked from escaping target_base"

@@ -170,7 +170,7 @@ end
 Each `failed` row gets a `failure_class` field captured in memory and surfaced at step 8:
 
 - **`task`** — `/auto-do` returned a `failed:round-2-must-fix` / `failed:test-gate` / `failed:complexity-smell` / `failed:ambiguity` `Final status:`. The task itself failed quality.
-- **`infra`** — sub-agent timeout (60 min), worktree-create failure, branch-create failure, `gh` rate limit (HTTP 403/429 / "secondary rate limit" body), git lock contention. Re-runnable; not a task quality signal.
+- **`infra`** — `/auto-do` returned `failed:codex-setup`, or the run hit a sub-agent timeout (60 min), worktree-create failure, branch-create failure, `gh` rate limit (HTTP 403/429 / "secondary rate limit" body), or git lock contention. Re-runnable after the environment is repaired; not a task quality signal.
 - **`protocol-violation`** — sub-agent's last response missing or unparseable `RESULT:` line. The `/auto-do` contract was violated; investigate manually before re-running.
 
 Cascade-block applies regardless of class — a failed parent blocks its descendants. The class lets the user re-author the row appropriately (re-run for `infra`, fix-and-re-run for `task`, debug for `protocol-violation`).
@@ -300,6 +300,7 @@ For each wave until termination:
 6. **Per-row outcome classification** (parse each agent's RESULT line):
    - `status=success` → row state `succeeded`. Capture branch + PR URL.
    - `status=failed:round-2-must-fix` | `failed:test-gate` | `failed:complexity-smell` | `failed:ambiguity` → row `failed`; `failure_class: task`.
+   - `status=failed:codex-setup` → row `failed`; `failure_class: infra`.
    - Self-classified `status=failed:timeout` (sub-agent hit its 60-min self-policing limit) → row `failed`; `failure_class: infra`.
    - Worktree/branch create error during step 6.3 → row `failed`; `failure_class: infra`.
    - Anything else, RESULT line missing, or unparseable → row `failed`; `failure_class: protocol-violation`. Capture first 200 chars of the agent's response into the row's annotation (surfaced at step 8).
@@ -383,6 +384,7 @@ Print:
 | Subtask test gate | Row `failed` (failure_class: task); cascade-block dependents; continue | scheduler runs to termination |
 | Subtask complexity smell | Row `failed` (failure_class: task); cascade-block dependents; continue | scheduler runs to termination |
 | Subtask `/auto-do` ambiguity | Row `failed` (failure_class: task); cascade-block dependents; continue | scheduler runs to termination |
+| Subtask Codex plugin setup/auth failure | Row `failed` (failure_class: infra); cascade-block dependents; continue | scheduler runs to termination |
 | `gh` rate limit during a sub-agent's `gh pr create` | Row `failed` (failure_class: infra typically; depends on how `/auto-do` reports); cascade-block dependents; continue | scheduler runs to termination |
 | Manifest tampered externally during run | Detected at step 8 hash check; refuses to clobber | `halted:manifest-tampered` (user-facing report only) |
 | Main thread's working tree dirty at step 8 | Bail at step 8 before checkout/write | `halted:dirty-tree` (user-facing report only) |

@@ -111,6 +111,14 @@ runtime_target() {
   esac
 }
 
+install_args_for() {
+  local runtime="$1"
+  printf '%s\n' "--$SCOPE" "--$runtime"
+  if [[ "$runtime" == "claude" && "$WITH_CODEX_PLUGIN" -eq 1 ]]; then
+    printf '%s\n' "--with-codex-plugin"
+  fi
+}
+
 allowed_re_for() {
   case "$1" in
     claude) printf '%s\n' '^(commands|agents)/[A-Za-z0-9._-]+\.md$|^hooks/[A-Za-z0-9._-]+\.sh$' ;;
@@ -161,10 +169,10 @@ update_one() {
 
   echo "Updating $runtime adapter from version $prev_version..."
   echo ""
-  local install_args=("--$SCOPE" "--$runtime")
-  if [[ "$runtime" == "claude" && "$WITH_CODEX_PLUGIN" -eq 1 ]]; then
-    install_args+=("--with-codex-plugin")
-  fi
+  local install_args=()
+  while IFS= read -r arg; do
+    install_args+=("$arg")
+  done < <(install_args_for "$runtime")
   bash "$INSTALL_SH" "${install_args[@]}"
 
   if [[ "$had_prev" -eq 1 ]]; then

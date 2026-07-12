@@ -35,7 +35,29 @@ Option 3. Concretely:
 
 ## Outcome
 
-PR: [#33](https://github.com/adamhulme/the-workshop/pull/33) — `agent/add-codex-plugin-cc` → `main`. In review; this section to be completed at merge.
+PR: [#33](https://github.com/adamhulme/the-workshop/pull/33) — `agent/add-codex-plugin-cc` → `main`.
+
+The two-round review found and fixed installer ordering, marketplace-source verification, and real-CLI JSON-shape bugs. The follow-up pass then closed every deferred PR #33 item: plugin-not-ready runs now terminate explicitly as `failed:codex-setup`, review effort is consistent, rollback and unpinned-tracking behavior are documented, provider doctrine is shared across runtimes, live tests watch the upstream agent/flag surface, and Windows environments without native symlinks no longer report a false smoke failure.
+
+### What worked
+
+- Keeping the official plugin external and opt-in preserved its independent update path and made the trust boundary visible.
+- Running the installed workflow against its own PR exposed boundary bugs that mocked first-install tests missed.
+- The plugin → CLI → labelled Claude ladder retained compatibility without compromising the audit trail.
+
+### What didn't
+
+- The first mock used invented Claude CLI JSON shapes, so its idempotency assertion proved the mock rather than the real boundary.
+- Prompt wording described rescue-agent work as read-only without distinguishing a request from an enforced sandbox.
+- Deferring all should-fix and follow-up findings to `TODOS.md` left doctrine and platform-test inconsistencies behind after the must-fix loop ended.
+
+### Prevention
+
+- `test/smoke-install.sh` now probes the real Claude CLI when available, including the scoped commands, installed `codex-rescue` agent, and rescue routing flags.
+- Shared instructions now require every external-provider fallback to be labelled.
+- `/auto-do` and `/auto-fleet` have an explicit `failed:codex-setup` contract instead of improvising when an installed plugin is not ready.
+
+Would the system catch this next time? **Yes for the observed failure classes:** mocked CLI drift, upstream agent/flag removal, provider-label drift, and unsupported native-symlink tests now each have a check or durable rule.
 
 ### Reusable principle
 

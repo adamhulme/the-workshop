@@ -214,7 +214,7 @@ Browse verify:  <ran:<note-path> | skipped:<reason>>
 Review rounds:  <1 | 2>
 Findings R1:    must=<X> should=<Y> follow=<Z>
 Findings R2:    must=<X>  (or "skipped — round 1 clean")
-Final status:   <success | failed:round-2-must-fix | failed:test-gate | failed:complexity-smell | failed:ambiguity>
+Final status:   <success | failed:round-2-must-fix | failed:test-gate | failed:complexity-smell | failed:ambiguity | failed:codex-setup>
 Auto-decisions: see PR body
 Next:           Human reviews PR. /auto-do does not merge.
 ```
@@ -257,7 +257,7 @@ Required entries (in order):
 - `review-r1-gate: address-must-fix-now` (from step 12).
 - `review-r1-first-push: <not-fired | push-and-create>` (from step 12).
 - `review-r2: <clean | failed: N must-fix>` (from step 12).
-- `final-status: <success | failed:round-2-must-fix | failed:test-gate | failed:complexity-smell | failed:ambiguity>` (from step 13; `failed:complexity-smell` exits at step 5 before any PR is created — log to console + the run's solution doc rather than a PR body).
+- `final-status: <success | failed:round-2-must-fix | failed:test-gate | failed:complexity-smell | failed:ambiguity | failed:codex-setup>` (from step 13; failures before PR creation are logged to console + the run's solution doc rather than a PR body).
 
 ## Degradations
 
@@ -266,6 +266,7 @@ Required entries (in order):
 - **`docs/plans/` missing** → step 2 holds the plan in conversation; logged.
 - **`docs/solutions/` missing** → step 6 skips; logged.
 - **Codex plugin available** → eng-review and `/review-pr` prefer its `codex:codex-rescue` agent for read-only Codex dispatches.
+- **Plugin installed but setup/authentication fails** → halt rather than changing models. Before PR creation, record `Final status: failed:codex-setup` in the solution doc and stop. During step 12, convert the PR to draft, post a blocking `/codex:setup` comment, record the same final status in the PR body, and stop. Do not fall through to the direct CLI path after selecting the plugin.
 - **Plugin unavailable but `codex` on PATH** → use the direct CLI path.
 - **Neither Codex path available** → fall back to `general-purpose` Agent and label the result as a Claude fallback.
 - **Test command not detectable** → step 9 logs and continues (does not block solely on detection failure).

@@ -17,6 +17,7 @@ A bump is reserved until the next release; in-progress work lives under `[Unrele
 ### Changed
 
 - Claude-side Codex dispatch now prefers OpenAI's official `codex-plugin-cc` rescue agent in `/plan-eng-review`, `/plan-design-review`, `/review-pr`, and `/auto-do`. Direct `codex exec` remains the fallback when the plugin is not installed; the final `general-purpose` fallback is now explicitly labelled as Claude. A plugin setup/auth failure no longer silently changes models.
+- Codex-plugin hardening now source-verifies the marketplace, distinguishes install from update using the real CLI JSON shape, validates the live agent/flag surface when available, gives autonomous runs a `failed:codex-setup` terminal state, and skips the symlink-escape smoke only when native symlinks are genuinely unavailable.
 - `/review-pr` now posts a consolidated findings comment to the PR at each review round (`gh pr comment <n>` with the must-fix / should-fix / follow-up list). Round 2 also posts a "Round 2 clean" comment when no new must-fix items were surfaced. Comment posting is observability-only — failures log and continue, the in-conversation review flow is unaffected. Skips silently when reviewing a feature branch with no PR.
 
 ### Added
