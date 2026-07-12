@@ -21,14 +21,25 @@ git clone https://github.com/adamhulme/the-workshop.git
 cd the-workshop
 ./install.sh                         # Claude user scope → ~/.claude/{commands,agents,hooks}/
 ./install.sh --project               # Claude project scope → ./.claude/{commands,agents,hooks}/
+./install.sh --with-codex-plugin     # Claude user scope + OpenAI's Codex companion plugin
+./install.sh --project --with-codex-plugin # project-scoped Claude tools + plugin
 ./install.sh --codex                 # Codex user scope → ~/.codex/the-workshop/
 ./install.sh --project --codex       # Codex project scope → ./.codex/the-workshop/
 ./install.sh --both                  # install both runtime adapters
 ```
 
-Requires `bash` and `git`. On Windows, run from Git Bash or WSL. Restart Claude Code after installing the Claude adapter — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool. Point Codex sessions at the installed `WORKSHOP.md`, `skills/`, `agents/`, and `core/` directories for the Codex adapter.
+Requires `bash` and `git`. On Windows, run from Git Bash or WSL. `--with-codex-plugin` additionally requires the `claude` CLI; the plugin itself requires Node.js 18.18+ and a local Codex login. Restart Claude Code after installing the Claude adapter — commands appear in your `/` autocomplete; agents become dispatchable via the Agent tool. After the plugin install, run `/reload-plugins` and `/codex:setup`. Point Codex sessions at the installed `WORKSHOP.md`, `skills/`, `agents/`, and `core/` directories for the Codex adapter.
 
 `install.sh` writes a manifest (`.workshop-manifest`) and a version file (`.workshop-version`) into each runtime install target so that `update.sh` can later diff cleanly against upstream and prune files that runtime adapter has removed.
+
+`--with-codex-plugin` is an explicit trust decision: it registers the official `openai/codex-plugin-cc` marketplace and tracks its latest published plugin version rather than pinning a commit. The installer verifies the marketplace source before installing or updating. To remove the external state later, use the same scope you installed with:
+
+```bash
+claude plugin uninstall codex@openai-codex --scope user      # or: project
+claude plugin marketplace remove openai-codex --scope user   # or: project
+```
+
+Reverting this repository does not uninstall an already-registered Claude plugin or marketplace.
 
 
 ## Runtime support model
@@ -47,12 +58,13 @@ The workshop runs without any of these. Each one unlocks a specific capability �
 
 | Integration | What unlocks | Used by |
 |-------------|--------------|---------|
-| [**Codex CLI**](https://github.com/openai/codex) on `PATH` | Cross-model independent second opinion. Runs as `codex exec --skip-git-repo-check`; falls back to a `general-purpose` Agent if missing. | `/plan-eng-review`, `/plan-design-review` |
+| [**OpenAI Codex plugin for Claude Code**](https://github.com/openai/codex-plugin-cc) | Native `/codex:*` commands, background jobs, session transfer, and a managed Codex rescue agent. Install with `./install.sh --with-codex-plugin`. | Preferred Codex path for `/plan-eng-review`, `/plan-design-review`, `/review-pr`, and `/auto-do` |
+| [**Codex CLI**](https://github.com/openai/codex) on `PATH` | Direct cross-model fallback when the Claude plugin is not installed. | `/plan-eng-review`, `/plan-design-review`, `/review-pr`, `/auto-do` |
 | [**Atlassian MCP**](https://www.atlassian.com/platform/remote-mcp-server) configured in Claude Code | Pull Jira issues / Confluence pages directly into research, sweep your Jira queue. Skills prompt for paste-in fallback if missing. | `/research` (Jira ID, Confluence URL/ID), `/triage` (Jira queue sweep) |
 | **`gh` CLI** authenticated | Read PR titles/bodies and unresolved review threads on the current branch. Skills skip the relevant pass if missing. | `/triage` (PR-comment sweep), `/changelog` (PR enrichment) |
 | [**Playwright MCP**](https://github.com/microsoft/playwright-mcp) (or Chrome DevTools MCP) configured in Claude Code | Drive a visible browser to verify changes or walk a user flow. Without it, `/browse` prints a setup snippet and exits. | `/browse` (headed sessions, `--setup` for credential storage state) |
 
-None are hard dependencies. The Claude adapter uses these integrations where available; Codex adapter files should map the same workflow intent onto whatever connectors are available in a Codex session. Install the integrations that match your workflow.
+None are hard dependencies. For Claude-side Codex work, the workshop prefers the official plugin's `codex:codex-rescue` agent, then the direct Codex CLI, then a clearly labelled Claude `general-purpose` fallback. Plugin setup/auth failures are surfaced instead of silently changing models. Codex adapter files should map the same workflow intent onto whatever connectors are available in a Codex session. Install the integrations that match your workflow.
 
 ## Starter guide — your first run
 
@@ -134,6 +146,7 @@ Pull the latest skills with `update.sh`:
 ./update.sh                # auto-detects user vs project from the manifest
 ./update.sh --user
 ./update.sh --project
+./update.sh --with-codex-plugin # also install/update the Claude Code Codex plugin
 ```
 
 Or via curl-pipe-bash from anywhere:
@@ -209,9 +222,9 @@ Why this shape: future skills (synthesis, brainstorming) can scan many interview
 | [`/changelog`](commands/changelog.md) | Synthesise an engaging changelog from recent merges to `main`. Writes to `docs/changelog.md`. |
 | [`/team-init`](commands/team-init.md) | Scaffold a six-persona consultation team (product-strategist, user-advocate, domain-specialist, technical-architect, quality-risk, delivery-lead) into the project, filled from a project-context questionnaire. |
 | [`/consult`](commands/consult.md) | Multi-perspective consultation with the project's persona team — surfaces disagreements, runs targeted rebuttals, synthesises with tensions preserved. |
-| [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance — with an optional independent Codex second opinion (`codex exec`). |
-| [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns — with an optional adversarial Codex outside voice (`codex exec`). |
-| [`/review-pr`](commands/review-pr.md) | Bounded 2-round PR review loop. Codex CLI and the `pr-reviewer` agent trade reviewer/implementer roles; round 1 in parallel, round 2 swap. Hard cap at 2 rounds. Fix-up commits **auto-push** to the PR branch (never to default branch, never `--force`). |
+| [`/plan-eng-review`](commands/plan-eng-review.md) | Engineering-manager-mode plan critique covering scope, architecture, code quality, tests, and performance — with an optional independent Codex second opinion through the official plugin or CLI fallback. |
+| [`/plan-design-review`](commands/plan-design-review.md) | Designer's-eye plan critique scoring eight design dimensions 0–10, surfacing gaps and AI-slop patterns — with an optional adversarial Codex outside voice through the official plugin or CLI fallback. |
+| [`/review-pr`](commands/review-pr.md) | Bounded 2-round PR review loop. Codex (official plugin preferred, CLI fallback) and the `pr-reviewer` agent trade reviewer/implementer roles; round 1 in parallel, round 2 swap. Hard cap at 2 rounds. Fix-up commits **auto-push** to the PR branch (never to default branch, never `--force`). |
 | [`/browse`](commands/browse.md) | Drive a visible browser via Playwright MCP (or Chrome DevTools MCP) so the user can watch Claude verify a change or walk a flow; capture the session as a structured research note plus screenshots under `docs/research/interviews/<slug>(-screenshots)/`. `--setup` mode persists Playwright `storageState` to `.claude/browse/storage-state.json` (gitignored) for one-shot login on auth-gated apps. Read-only by default; destructive actions gated per-step. **Naming caveat:** collides with gstack's `browse` skill — install with `--project` scope or rename locally if both are present. |
 | [`/auto-do`](commands/auto-do.md) | Autonomous task runner. Chains `/plan` → `/plan-eng-review` (+ `/plan-design-review` when UI is touched) → implementation → `/solution` → PR creation → `/browse` verification (when applicable) → `/review-pr`, applying a documented auto-decision policy at every gate. Creates and reviews a PR but never merges — the merge gate stays human. Every auto-pick lands in the PR body's `## Auto-decisions` section for auditing. Stops on dirty tree, missing `gh`, complexity smell, test failure, or round-2 must-fix (PR converted to draft). |
 | [`/auto-fleet`](commands/auto-fleet.md) | Autonomous fleet runner. Reads a user-authored manifest at `docs/fleet/<slug>.md` and dispatches `/auto-do` per row in **parallel waves** (v1: `--max-parallel=N`, default 3, ceiling 5). Each row runs in its own git worktree at `.claude/auto-fleet/wt-<slug>-<id>/`. **Declared dependencies** (`depends_on` column) are dispatch-ordering only — children's branches are created off the default branch's pinned SHA, NOT off parent branches; if your task needs parent code in the child, split into multiple sequential fleets or wait for v2's epic-branch mode. **Cascade-block** on failure: when a parent fails, its dependents become `blocked`; other parallel branches continue. Hard cap of 10 queued rows per run. Backward-compatible with v0.1 manifests (no `depends_on` column). The fleet branch (`fleet/<slug>`) is a control plane that holds only the manifest and is never merged; subtask PRs target the default branch independently. SHA-256 hash check halts cleanly if the manifest is edited externally during a run. Failed-row worktrees preserved on disk for debugging. **v1 contract**: `/auto-do` must be runnable in a fresh checkout of the default branch (worktrees inherit only tracked files; no `.env` / `node_modules` / virtualenvs). |

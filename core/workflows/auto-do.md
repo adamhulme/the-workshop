@@ -27,7 +27,7 @@ Run a known-shape task end to end: plan, review the plan, implement, document th
 
 ## Autonomous policy
 
-Every automatic choice must be logged in the PR body or final report. If the task becomes ambiguous, risky, or larger than the approved plan, stop rather than silently expanding scope.
+Every automatic choice must be logged in the PR body or final report. If the task becomes ambiguous, risky, larger than the approved plan, or dependent on an installed integration that is not ready, stop rather than silently expanding scope or changing providers.
 
 ## Adapter notes
 

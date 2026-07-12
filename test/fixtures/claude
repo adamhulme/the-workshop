@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "$*" >> "$CLAUDE_TEST_LOG"
+
+case "$*" in
+  "plugin marketplace list --json") printf '%s\n' "${CLAUDE_TEST_MARKETPLACES:-[]}" ;;
+  "plugin list --json")             printf '%s\n' "${CLAUDE_TEST_PLUGINS:-[]}" ;;
+esac

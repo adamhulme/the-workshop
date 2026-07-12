@@ -91,9 +91,11 @@ Pick angles that genuinely differ — e.g. editorial-typographic, data-dense cal
 
 ## Step 5: Outside voice (optional)
 
-Ask once: "Want an adversarial design review from Codex before we finalise? (y/n) (Requires `codex` on PATH.)"
+Ask once: "Want an adversarial design review from Codex before we finalise? (y/n) (Uses the Codex plugin when installed, otherwise the `codex` CLI.)"
 
-If yes, dispatch Codex via `Bash` — **pipe the prompt via stdin** and use the gstack dispatch pattern. Don't pass the prompt as a positional arg; long prompts hang in some shells and trip arg-length limits.
+If yes and the `codex:codex-rescue` agent is available, use it as the preferred path. Dispatch one foreground `Agent` call with `subagent_type: codex:codex-rescue`. Begin the forwarded request with `--wait --fresh --effort high` and explicitly say the task is read-only. Include the resolved plan path and the same design-review prompt below. Ask for at most 800 words. Do not add `--write`, ask Codex to edit, or let the rescue agent do any Claude-side analysis. This read-only request is prompt-level, not an enforcement boundary; the plugin runtime controls the actual Codex sandbox. If the plugin reports a setup or authentication problem, surface it and tell the user to run `/codex:setup`.
+
+If the plugin agent is unavailable but `codex` is on `PATH`, dispatch Codex via `Bash` — **pipe the prompt via stdin** and use the gstack dispatch pattern. Don't pass the prompt as a positional arg; long prompts hang in some shells and trip arg-length limits.
 
 ```bash
 PLAN_PATH="path/to/your/plan.md"   # set to the resolved plan file
@@ -147,7 +149,7 @@ Why this pattern (borrowed from gstack):
 - **Stderr capture** surfaces auth failures and timeouts cleanly; users see "run `codex login`" instead of a silent hang.
 - **Cap output at 800 words** in the prompt — keeps codex from generating a 4000-word essay you have to skim.
 
-If `codex` is not on PATH, fall back to an `Agent` call with `subagent_type: general-purpose` and the same prompt body.
+If neither the plugin agent nor `codex` CLI is available, fall back to an `Agent` call with `subagent_type: general-purpose` and the same prompt body. Label that output `## Outside Voice (Claude fallback)` rather than implying Codex ran.
 
 Present the findings under a `## Outside Voice (Codex)` header. Surface them as new issues to the user — keep / fix / defer each one.
 

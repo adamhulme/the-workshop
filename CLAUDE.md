@@ -44,5 +44,6 @@ Mirrors `WORKSHOP.md`'s Learned principles — keep both in sync. Each links to 
 
 - **Zero-dependency hooks.** Hook scripts that ship to arbitrary environments must parse with bash builtins only (`grep`/`sed`/parameter expansion). External tools (`jq`, `python`, `node`) may not exist on the target system. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
 - **Layered reduction beats single-mechanism.** Multiple complementary mechanisms at different activation costs (always-on directives, opt-in modes, automated enforcement) compound better than one aggressive approach. Each layer catches what the others miss. *(from docs/solutions/token-efficiency.md, 2026-05-07)*
+- **Label every provider fallback.** When dispatching to an external model, use an explicit fallback ladder and identify which rung produced the output. Never silently replace a cross-model review with the current model; the audit trail is part of the result. *(from docs/solutions/codex-plugin-integration.md, 2026-07-12)*
 
 <!-- Add new principles above this line. -->
