@@ -3,6 +3,7 @@ set -euo pipefail
 
 printf '%s\n' "$*" >> "$CLAUDE_TEST_LOG"
 
-if [[ "$*" == "plugin marketplace list --json" ]]; then
-  printf '[]\n'
-fi
+case "$*" in
+  "plugin marketplace list --json") printf '%s\n' "${CLAUDE_TEST_MARKETPLACES:-[]}" ;;
+  "plugin list --json")             printf '%s\n' "${CLAUDE_TEST_PLUGINS:-[]}" ;;
+esac

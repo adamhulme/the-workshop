@@ -1,5 +1,25 @@
 # TODOs
 
+## Review findings — 2026-07-12 (PR #33, Codex Claude Code plugin integration)
+
+Round 1 review by Codex (`codex:codex-rescue` plugin agent), `pr-reviewer`, `security-reviewer`, and `compound-reviewer` in parallel. 4 must-fix items addressed inline (claude-CLI pre-flight moved before any writes; marketplace matched by source repo with impostor rejection; install/update branched on `claude plugin list` for idempotent refresh; solution doc written), plus the fixture file-mode should-fix (the fixture was being rewritten anyway). The following are deferred.
+
+### Should fix
+
+- **`commands/auto-do.md:268-270` plugin-not-ready undefined in autonomous run** — the degradation table omits "plugin installed but not ready/auth-failed"; the underlying commands mandate "stop the slot, surface `/codex:setup`", which is undefined behaviour for `/auto-do`. State whether it halts, degrades to the CLI path, or logs-and-continues. *(pr-reviewer)*
+- **`test/smoke-install.sh` mocked-boundary drift risk** — nothing validates the real `claude` CLI accepts `--scope` on `marketplace add` / `plugin update`; the mock accepts any argv and can drift from real behaviour with zero signal. *(flagged by 2 reviewers; fresh-install / re-run / impostor branches were added inline in round 1)*
+- **`WORKSHOP.md` + `CLAUDE.md` principle extraction** — the "prefer official plugin → direct CLI → labelled same-model fallback; never silently substitute models" doctrine is stated four ways across four command files but extracted nowhere; add one Learned-principles entry (WORKSHOP.md first per convention), sourced from `docs/solutions/codex-plugin-integration.md`. *(compound-reviewer)*
+- **`core/workflows/review-pr.md:38` adapter note outdated** — still reads "Claude may orchestrate reviewer agents and Codex CLI"; under-describes the plugin-first dispatch ladder. *(compound-reviewer)*
+
+### Follow-up
+
+- **`commands/review-pr.md:74` vs plan-review commands `--effort high` inconsistency** — plan reviews forward `--wait --fresh --effort high`; `/review-pr` forwards only `--wait --fresh` in both rounds. Align, or document the cost decision. *(pr-reviewer)*
+- **`README.md` plugin rollback docs** — document scoped plugin/marketplace removal commands (`claude plugin marketplace remove openai-codex`, plugin uninstall); reverting the PR does not revert external Claude plugin state. *(Codex)*
+- **`install.sh` unpinned plugin tracking** — marketplace add and plugin install/update track upstream HEAD of `openai/codex-plugin-cc`; document the trust decision next to the flag in README. Acceptable residual risk for an explicit opt-in. *(security-reviewer)*
+- **Command docs "read-only" caveat** — the "read-only, no `--write`" constraint on `codex:codex-rescue` dispatches is a prompt-level request, not an enforcement boundary (the plugin's own sandboxing governs writes); note this so future editors don't treat it as one. *(security-reviewer)*
+- **Upstream surface watch** — four command files hard-code the `codex:codex-rescue` agent name and `--wait`/`--fresh`/`--effort` flags; the smoke test mocks `claude`, so nothing catches upstream renames or flag changes in `codex-plugin-cc`. *(compound-reviewer)*
+- **Windows symlink smoke-test wall** — `test/smoke-install.sh`'s `resolves_within` symlink-escape check cannot pass in Windows Git Bash without native-symlink permission; decide whether it should skip when `ln -s` is unavailable, so future Windows sessions stop re-diagnosing it. *(compound-reviewer)*
+
 ## Review findings — 2026-07-09 (PR #32, runtime-neutral core + Codex adapter)
 
 Round 1 review by Codex CLI, `pr-reviewer`, `security-reviewer`, `performance-reviewer`, and `compound-reviewer` in parallel. 4 must-fix and 6 should-fix items addressed inline (per user direction to fix both tiers this round). The following items are genuinely deferred.

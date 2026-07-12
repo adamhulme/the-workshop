@@ -54,6 +54,11 @@ if [[ "$WITH_CODEX_PLUGIN" -eq 1 && "$RUNTIME" == "codex" ]]; then
   exit 1
 fi
 
+if [[ "$WITH_CODEX_PLUGIN" -eq 1 ]] && ! command -v claude >/dev/null 2>&1; then
+  echo "Claude Code is required for --with-codex-plugin. Install Claude Code and re-run." >&2
+  exit 1
+fi
+
 # Locate the source. If the script is running from a clone, use it.
 # Otherwise (curl-pipe-bash), shallow-clone to a temp dir.
 SOURCE_BASE=""
@@ -173,23 +178,33 @@ install_claude() {
 }
 
 install_codex_plugin() {
-  if ! command -v claude >/dev/null 2>&1; then
-    echo "Claude Code is required for --with-codex-plugin. Install Claude Code and re-run." >&2
-    exit 1
-  fi
-
+  # Match the marketplace by its source repo, not just its name — a same-named
+  # marketplace registered from elsewhere must fail loudly, never install.
   local marketplaces
   marketplaces="$(claude plugin marketplace list --json 2>/dev/null || printf '[]')"
-  if ! grep -Eq '"name"[[:space:]]*:[[:space:]]*"openai-codex"' <<< "$marketplaces"; then
+  if grep -Fq 'openai/codex-plugin-cc' <<< "$marketplaces"; then
+    claude plugin marketplace update openai-codex
+  elif grep -Eq '"name"[[:space:]]*:[[:space:]]*"openai-codex"' <<< "$marketplaces"; then
+    echo "A marketplace named 'openai-codex' is already registered but does not point at openai/codex-plugin-cc." >&2
+    echo "Remove it (claude plugin marketplace remove openai-codex) and re-run." >&2
+    exit 1
+  else
     echo ""
     echo "Adding the OpenAI Codex plugin marketplace..."
     claude plugin marketplace add openai/codex-plugin-cc --scope "$SCOPE"
   fi
 
-  claude plugin marketplace update openai-codex
-  echo "Installing the Codex plugin for Claude Code..."
-  claude plugin install codex@openai-codex --scope "$SCOPE"
-  claude plugin update codex@openai-codex --scope "$SCOPE"
+  # `plugin install` on an already-installed plugin is not guaranteed idempotent;
+  # under set -e a reinstall error would hard-fail every update.sh refresh.
+  local plugins
+  plugins="$(claude plugin list --json 2>/dev/null || printf '[]')"
+  if grep -Eq '"name"[[:space:]]*:[[:space:]]*"codex"' <<< "$plugins"; then
+    echo "Updating the Codex plugin for Claude Code..."
+    claude plugin update codex@openai-codex --scope "$SCOPE"
+  else
+    echo "Installing the Codex plugin for Claude Code..."
+    claude plugin install codex@openai-codex --scope "$SCOPE"
+  fi
   echo "Installed codex@openai-codex ($SCOPE scope). Run /reload-plugins, then /codex:setup in Claude Code."
 }
 

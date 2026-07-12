@@ -52,6 +52,8 @@ CLAUDE_TEST_LOG="$SCRATCH/claude-plugin-calls.log"
 mkdir -p "$MOCK_BIN"
 cp "$REPO_ROOT/test/fixtures/claude" "$MOCK_BIN/claude"
 chmod +x "$MOCK_BIN/claude"
+
+# fresh machine: no marketplace, no plugin
 (
   cd "$SCRATCH"
   PATH="$MOCK_BIN:$PATH" CLAUDE_TEST_LOG="$CLAUDE_TEST_LOG" \
@@ -63,9 +65,44 @@ grep -qx 'plugin marketplace add openai/codex-plugin-cc --scope project' "$CLAUD
 grep -qx 'plugin install codex@openai-codex --scope project' "$CLAUDE_TEST_LOG" \
   && pass "Codex plugin installed at project scope" \
   || fail "Codex plugin install was not scoped to the project"
-grep -qx 'plugin update codex@openai-codex --scope project' "$CLAUDE_TEST_LOG" \
-  && pass "Codex plugin refreshed after install" \
-  || fail "Codex plugin update was not invoked"
+if grep -qx 'plugin update codex@openai-codex --scope project' "$CLAUDE_TEST_LOG"; then
+  fail "fresh install ran plugin update (install alone should suffice)"
+else
+  pass "fresh install skips plugin update"
+fi
+
+# marketplace and plugin already present: refresh only, no add / reinstall
+CLAUDE_TEST_LOG_RERUN="$SCRATCH/claude-plugin-calls-rerun.log"
+(
+  cd "$SCRATCH"
+  PATH="$MOCK_BIN:$PATH" CLAUDE_TEST_LOG="$CLAUDE_TEST_LOG_RERUN" \
+    CLAUDE_TEST_MARKETPLACES='[{"name": "openai-codex", "source": {"source": "github", "repo": "openai/codex-plugin-cc"}}]' \
+    CLAUDE_TEST_PLUGINS='[{"name": "codex", "version": "0.1.0"}]' \
+    bash "$REPO_ROOT/install.sh" --project --claude --with-codex-plugin >/dev/null
+)
+grep -qx 'plugin marketplace update openai-codex' "$CLAUDE_TEST_LOG_RERUN" \
+  && pass "existing marketplace refreshed on re-run" \
+  || fail "existing marketplace was not refreshed on re-run"
+grep -qx 'plugin update codex@openai-codex --scope project' "$CLAUDE_TEST_LOG_RERUN" \
+  && pass "existing plugin updated on re-run" \
+  || fail "existing plugin was not updated on re-run"
+if grep -qxE 'plugin (marketplace add|install) .*' "$CLAUDE_TEST_LOG_RERUN"; then
+  fail "re-run re-added the marketplace or reinstalled the plugin"
+else
+  pass "re-run skips marketplace add and plugin install"
+fi
+
+# same-named marketplace from a different source: refuse to install
+if (
+  cd "$SCRATCH"
+  PATH="$MOCK_BIN:$PATH" CLAUDE_TEST_LOG="$SCRATCH/claude-plugin-calls-impostor.log" \
+    CLAUDE_TEST_MARKETPLACES='[{"name": "openai-codex", "source": {"source": "github", "repo": "not-openai/impostor"}}]' \
+    bash "$REPO_ROOT/install.sh" --project --claude --with-codex-plugin >/dev/null 2>&1
+); then
+  fail "impostor openai-codex marketplace was accepted"
+else
+  pass "impostor openai-codex marketplace is rejected"
+fi
 
 if bash "$REPO_ROOT/install.sh" --project --codex --with-codex-plugin >/dev/null 2>&1; then
   fail "Codex-only adapter accepted --with-codex-plugin"
