@@ -198,7 +198,7 @@ install_codex_plugin() {
   # under set -e a reinstall error would hard-fail every update.sh refresh.
   local plugins
   plugins="$(claude plugin list --json 2>/dev/null || printf '[]')"
-  if grep -Eq '"name"[[:space:]]*:[[:space:]]*"codex"' <<< "$plugins"; then
+  if grep -Eq '"id"[[:space:]]*:[[:space:]]*"codex@openai-codex"' <<< "$plugins"; then
     echo "Updating the Codex plugin for Claude Code..."
     claude plugin update codex@openai-codex --scope "$SCOPE"
   else

@@ -76,8 +76,8 @@ CLAUDE_TEST_LOG_RERUN="$SCRATCH/claude-plugin-calls-rerun.log"
 (
   cd "$SCRATCH"
   PATH="$MOCK_BIN:$PATH" CLAUDE_TEST_LOG="$CLAUDE_TEST_LOG_RERUN" \
-    CLAUDE_TEST_MARKETPLACES='[{"name": "openai-codex", "source": {"source": "github", "repo": "openai/codex-plugin-cc"}}]' \
-    CLAUDE_TEST_PLUGINS='[{"name": "codex", "version": "0.1.0"}]' \
+    CLAUDE_TEST_MARKETPLACES='[{"name": "openai-codex", "source": "github", "repo": "openai/codex-plugin-cc"}]' \
+    CLAUDE_TEST_PLUGINS='[{"id": "codex@openai-codex", "version": "1.0.6", "scope": "project", "enabled": true}]' \
     bash "$REPO_ROOT/install.sh" --project --claude --with-codex-plugin >/dev/null
 )
 grep -qx 'plugin marketplace update openai-codex' "$CLAUDE_TEST_LOG_RERUN" \
@@ -96,7 +96,7 @@ fi
 if (
   cd "$SCRATCH"
   PATH="$MOCK_BIN:$PATH" CLAUDE_TEST_LOG="$SCRATCH/claude-plugin-calls-impostor.log" \
-    CLAUDE_TEST_MARKETPLACES='[{"name": "openai-codex", "source": {"source": "github", "repo": "not-openai/impostor"}}]' \
+    CLAUDE_TEST_MARKETPLACES='[{"name": "openai-codex", "source": "github", "repo": "not-openai/impostor"}]' \
     bash "$REPO_ROOT/install.sh" --project --claude --with-codex-plugin >/dev/null 2>&1
 ); then
   fail "impostor openai-codex marketplace was accepted"
