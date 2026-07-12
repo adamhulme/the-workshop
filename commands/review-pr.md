@@ -1,9 +1,9 @@
 ---
-description: Bounded 2-round PR review loop — Codex CLI and pr-reviewer agent trade reviewer/implementer roles, fixes auto-pushed, findings posted to the PR each round
+description: Bounded 2-round PR review loop — Codex and pr-reviewer agent trade reviewer/implementer roles, fixes auto-pushed, findings posted to the PR each round
 argument-hint: [pr-number]
 ---
 
-A short, cost-bounded reviewing process. **Codex CLI** and the **`pr-reviewer` agent** trade reviewer/implementer roles across two rounds. Hard cap at 2 rounds — the cap is the point.
+A short, cost-bounded reviewing process. **Codex** (through the official Claude Code plugin when available, otherwise the CLI) and the **`pr-reviewer` agent** trade reviewer/implementer roles across two rounds. Hard cap at 2 rounds — the cap is the point.
 
 User arguments: $ARGUMENTS
 
@@ -13,7 +13,7 @@ The single user gate at step 4 uses **`AskUserQuestion`**, not a trailing prose 
 
 ## Token / time budget (ceiling)
 
-- 2 × Codex CLI calls (round 1 + round 2)
+- 2 × Codex calls (plugin or CLI; round 1 + round 2)
 - 1 × `pr-reviewer` subagent call (round 1, always)
 - 0–1 × `security-reviewer` subagent call (round 1, conditional)
 - 0–1 × `performance-reviewer` subagent call (round 1, conditional)
@@ -71,13 +71,13 @@ Log which agents were selected and why: `review-scope: codex + pr-reviewer + [se
 
 In a single message, dispatch the selected agents in parallel:
 
-- **Codex review (Bash)** (always): `codex exec --skip-git-repo-check "<rubric prompt>"`. Pipe or embed the diff. Same five-dimension rubric as `pr-reviewer` (correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup). Ask Codex for structured output: `file:line | category | severity | finding`.
+- **Codex review** (always): prefer an `Agent` call with `subagent_type: codex:codex-rescue` when that plugin agent is available. Forward `--wait --fresh` plus an explicitly read-only review request containing the captured diff and the same five-dimension rubric as `pr-reviewer` (correctness, scope drift, test coverage, risk-to-revert, follow-up cleanup). Ask for structured output: `file:line | category | severity | finding`. Do not add `--write`. If the plugin agent is unavailable, use `codex exec --skip-git-repo-check` with the same prompt and diff.
 - **pr-reviewer subagent** (always): `Agent` tool with `subagent_type: pr-reviewer`. Prompt includes the diff and the same rubric.
 - **security-reviewer subagent** (conditional): `Agent` tool with `subagent_type: security-reviewer`. Prompt includes the diff. Reviews injection, auth/authz, secrets, path traversal, crypto, dependency risk.
 - **performance-reviewer subagent** (conditional): `Agent` tool with `subagent_type: performance-reviewer`. Prompt includes the diff. Reviews queries, caching, algorithmic complexity, memory, token/API cost.
 - **compound-reviewer subagent** (conditional): `Agent` tool with `subagent_type: compound-reviewer`. Prompt includes the diff. Reviews whether the work closes the compounding loop — solution docs, principle extraction, prevention strategies, artifact tagging, deferred work visibility.
 
-If `codex` is not on PATH, fall back to a `general-purpose` Agent for the Codex slot. If any specialized reviewer agent is missing, fall back to `general-purpose` prompted with that agent's rubric summary.
+If neither the plugin agent nor `codex` CLI is available, fall back to a `general-purpose` Agent for the Codex slot and label it as a Claude fallback in the audit log. If the plugin exists but reports a setup or authentication problem, stop that Codex slot and tell the user to run `/codex:setup`; do not silently substitute Claude. If any specialized reviewer agent is missing, fall back to `general-purpose` prompted with that agent's rubric summary.
 
 Aggregate when all return.
 
@@ -169,8 +169,8 @@ Never use `--force`, `--force-with-lease`, or `--no-verify`.
 
 Single re-review by **Codex only**. Reasoning: `pr-reviewer` saw the pre-fix diff; main-thread Claude just implemented; Codex's previous round was on the pre-fix code. Codex is the only voice that hasn't seen the new state.
 
-- One Codex call: `codex exec --skip-git-repo-check` on the new diff (`gh pr diff <n>` again, or `git diff <default>...HEAD`). Focused prompt: "The previous review's must-fix items have been addressed. Check for **regressions**, **missed cases**, and **new issues introduced by the fix**. Same five-dimension rubric. Be terse."
-- If Codex isn't on PATH, fall back to a `general-purpose` Agent for round 2.
+- One Codex call on the new diff (`gh pr diff <n>` again, or `git diff <default>...HEAD`). Prefer `codex:codex-rescue` with `--wait --fresh` and an explicitly read-only prompt: "The previous review's must-fix items have been addressed. Check for **regressions**, **missed cases**, and **new issues introduced by the fix**. Same five-dimension rubric. Be terse." Do not add `--write`. If the plugin agent is unavailable, use `codex exec --skip-git-repo-check` with the same prompt and diff.
+- If neither Codex path is available, fall back to a `general-purpose` Agent for round 2 and label it as a Claude fallback. If the plugin is present but not ready, tell the user to run `/codex:setup` rather than silently changing models.
 
 Outcomes:
 
@@ -202,7 +202,8 @@ Suggested next step: link to the PR (if reviewing a PR), or `gh pr create` (if r
 ## Degradations
 
 - **No diff** → step 1 abort with a clear message.
-- **`codex` not on PATH** → fall back to `general-purpose` Agent for the Codex slot, both rounds. Note the fallback in the report.
+- **Plugin agent unavailable and `codex` not on PATH** → fall back to `general-purpose` Agent for the Codex slot, both rounds. Label the fallback in the report so the audit trail does not imply Codex ran.
+- **Plugin installed but not ready** → stop the Codex slot with `/codex:setup` guidance; do not silently switch models.
 - **`pr-reviewer` agent missing** (the workshop wasn't installed, or the user is running this command from outside) → bail with: "`/review-pr` requires the `pr-reviewer` agent. Run `./install.sh` from the workshop repo."
 - **Specialized reviewer agent missing** (`security-reviewer`, `performance-reviewer`, or `compound-reviewer`) → fall back to `general-purpose` Agent prompted with that reviewer's rubric summary. Log the fallback.
 - **Branch is default branch** → skip auto-push, do not refuse the rest of the flow.

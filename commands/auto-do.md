@@ -265,7 +265,9 @@ Required entries (in order):
 - **Default branch as HEAD** → step 1 creates `auto-do/<slug>`.
 - **`docs/plans/` missing** → step 2 holds the plan in conversation; logged.
 - **`docs/solutions/` missing** → step 6 skips; logged.
-- **`codex` not on PATH** → eng-review's outside voice falls back to `general-purpose` Agent (per `/plan-eng-review`'s existing handling); same for `/review-pr`'s round-2 Codex slot.
+- **Codex plugin available** → eng-review and `/review-pr` prefer its `codex:codex-rescue` agent for read-only Codex dispatches.
+- **Plugin unavailable but `codex` on PATH** → use the direct CLI path.
+- **Neither Codex path available** → fall back to `general-purpose` Agent and label the result as a Claude fallback.
 - **Test command not detectable** → step 9 logs and continues (does not block solely on detection failure).
 - **Test command fails** → step 9 stops; nothing pushed.
 - **Diff complexity exceeds smell threshold** → step 9 logs but does not block; human reviewer is the gate.

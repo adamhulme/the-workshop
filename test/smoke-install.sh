@@ -46,6 +46,33 @@ else
   fail "re-running install.sh changed codex manifest line count"
 fi
 
+# --- optional OpenAI Codex plugin install path ---
+MOCK_BIN="$SCRATCH/mock-bin"
+CLAUDE_TEST_LOG="$SCRATCH/claude-plugin-calls.log"
+mkdir -p "$MOCK_BIN"
+cp "$REPO_ROOT/test/fixtures/claude" "$MOCK_BIN/claude"
+chmod +x "$MOCK_BIN/claude"
+(
+  cd "$SCRATCH"
+  PATH="$MOCK_BIN:$PATH" CLAUDE_TEST_LOG="$CLAUDE_TEST_LOG" \
+    bash "$REPO_ROOT/install.sh" --project --claude --with-codex-plugin >/dev/null
+)
+grep -qx 'plugin marketplace add openai/codex-plugin-cc --scope project' "$CLAUDE_TEST_LOG" \
+  && pass "Codex plugin marketplace added at project scope" \
+  || fail "Codex plugin marketplace add was not scoped to the project"
+grep -qx 'plugin install codex@openai-codex --scope project' "$CLAUDE_TEST_LOG" \
+  && pass "Codex plugin installed at project scope" \
+  || fail "Codex plugin install was not scoped to the project"
+grep -qx 'plugin update codex@openai-codex --scope project' "$CLAUDE_TEST_LOG" \
+  && pass "Codex plugin refreshed after install" \
+  || fail "Codex plugin update was not invoked"
+
+if bash "$REPO_ROOT/install.sh" --project --codex --with-codex-plugin >/dev/null 2>&1; then
+  fail "Codex-only adapter accepted --with-codex-plugin"
+else
+  pass "Codex-only adapter rejects Claude plugin flag"
+fi
+
 # --- update.sh prune allowlist + traversal + symlink-escape guards (pure-function checks) ---
 eval "$(sed -n '/^resolves_within/,/^}/p' "$REPO_ROOT/update.sh")"
 eval "$(sed -n '/^has_dotdot_segment/,/^}/p' "$REPO_ROOT/update.sh")"

@@ -14,6 +14,7 @@ set -euo pipefail
 REPO_URL="https://github.com/adamhulme/the-workshop.git"
 SCOPE="user"
 RUNTIME="claude"
+WITH_CODEX_PLUGIN=0
 CLAUDE_TARGET_BASE="$HOME/.claude"
 CODEX_TARGET_BASE="$HOME/.codex/the-workshop"
 TARGET_BASE="$CLAUDE_TARGET_BASE"
@@ -23,13 +24,15 @@ usage() {
 Install the-workshop adapters.
 
 Usage:
-  install.sh [--user|--project] [--claude|--codex|--both]
+  install.sh [--user|--project] [--claude|--codex|--both] [--with-codex-plugin]
 
   --user      Install to user scope (default)
   --project   Install to project scope
   --claude    Install Claude Code adapter only (default)
   --codex     Install Codex adapter only
   --both      Install both adapters
+  --with-codex-plugin
+              Also install OpenAI's Codex plugin for Claude Code
 USAGE
 }
 
@@ -40,10 +43,16 @@ while [[ $# -gt 0 ]]; do
     --claude)  RUNTIME="claude"; shift ;;
     --codex)   RUNTIME="codex"; shift ;;
     --both)    RUNTIME="both"; shift ;;
+    --with-codex-plugin) WITH_CODEX_PLUGIN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown flag: $1" >&2; usage; exit 1 ;;
   esac
 done
+
+if [[ "$WITH_CODEX_PLUGIN" -eq 1 && "$RUNTIME" == "codex" ]]; then
+  echo "--with-codex-plugin requires the Claude adapter (--claude or --both)." >&2
+  exit 1
+fi
 
 # Locate the source. If the script is running from a clone, use it.
 # Otherwise (curl-pipe-bash), shallow-clone to a temp dir.
@@ -163,6 +172,27 @@ install_claude() {
   echo "Restart Claude Code; commands appear in /-autocomplete, agents are dispatchable via the Agent tool."
 }
 
+install_codex_plugin() {
+  if ! command -v claude >/dev/null 2>&1; then
+    echo "Claude Code is required for --with-codex-plugin. Install Claude Code and re-run." >&2
+    exit 1
+  fi
+
+  local marketplaces
+  marketplaces="$(claude plugin marketplace list --json 2>/dev/null || printf '[]')"
+  if ! grep -Eq '"name"[[:space:]]*:[[:space:]]*"openai-codex"' <<< "$marketplaces"; then
+    echo ""
+    echo "Adding the OpenAI Codex plugin marketplace..."
+    claude plugin marketplace add openai/codex-plugin-cc --scope "$SCOPE"
+  fi
+
+  claude plugin marketplace update openai-codex
+  echo "Installing the Codex plugin for Claude Code..."
+  claude plugin install codex@openai-codex --scope "$SCOPE"
+  claude plugin update codex@openai-codex --scope "$SCOPE"
+  echo "Installed codex@openai-codex ($SCOPE scope). Run /reload-plugins, then /codex:setup in Claude Code."
+}
+
 install_codex() {
   TARGET_BASE="$CODEX_TARGET_BASE"
   MANIFEST_LINES=()
@@ -188,8 +218,16 @@ install_codex() {
 }
 
 case "$RUNTIME" in
-  claude) install_claude ;;
+  claude)
+    install_claude
+    if [[ "$WITH_CODEX_PLUGIN" -eq 1 ]]; then install_codex_plugin; fi
+    ;;
   codex) install_codex ;;
-  both) install_claude; echo ""; install_codex ;;
+  both)
+    install_claude
+    if [[ "$WITH_CODEX_PLUGIN" -eq 1 ]]; then install_codex_plugin; fi
+    echo ""
+    install_codex
+    ;;
   *) echo "Unknown runtime: $RUNTIME" >&2; exit 1 ;;
 esac

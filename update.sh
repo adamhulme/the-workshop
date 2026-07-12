@@ -15,6 +15,7 @@ set -euo pipefail
 REPO_URL="https://github.com/adamhulme/the-workshop.git"
 SCOPE=""
 RUNTIME=""
+WITH_CODEX_PLUGIN=0
 CLAUDE_TARGET_BASE=""
 CODEX_TARGET_BASE=""
 
@@ -23,13 +24,15 @@ usage() {
 Update the-workshop adapters.
 
 Usage:
-  update.sh [--user|--project] [--claude|--codex|--both]
+  update.sh [--user|--project] [--claude|--codex|--both] [--with-codex-plugin]
 
   --user      Update user-scoped install(s)
   --project   Update project-scoped install(s)
   --claude    Update Claude Code adapter
   --codex     Update Codex adapter
   --both      Update both adapters
+  --with-codex-plugin
+              Also install or refresh OpenAI's Codex plugin for Claude Code
 
 If no scope is given, update.sh auto-detects user vs project manifests and
 prefers user when both exist. If no runtime is given, it updates every detected
@@ -44,6 +47,7 @@ while [[ $# -gt 0 ]]; do
     --claude)  RUNTIME="claude"; shift ;;
     --codex)   RUNTIME="codex"; shift ;;
     --both)    RUNTIME="both"; shift ;;
+    --with-codex-plugin) WITH_CODEX_PLUGIN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown flag: $1" >&2; usage; exit 1 ;;
   esac
@@ -81,6 +85,11 @@ if [[ -z "$RUNTIME" ]]; then
   else
     RUNTIME="${detected[0]}"
   fi
+fi
+
+if [[ "$WITH_CODEX_PLUGIN" -eq 1 && "$RUNTIME" == "codex" ]]; then
+  echo "--with-codex-plugin requires the Claude adapter (--claude or --both)." >&2
+  exit 1
 fi
 
 if ! command -v git >/dev/null 2>&1; then
@@ -152,7 +161,11 @@ update_one() {
 
   echo "Updating $runtime adapter from version $prev_version..."
   echo ""
-  bash "$INSTALL_SH" "--$SCOPE" "--$runtime"
+  local install_args=("--$SCOPE" "--$runtime")
+  if [[ "$runtime" == "claude" && "$WITH_CODEX_PLUGIN" -eq 1 ]]; then
+    install_args+=("--with-codex-plugin")
+  fi
+  bash "$INSTALL_SH" "${install_args[@]}"
 
   if [[ "$had_prev" -eq 1 ]]; then
     grep -v '^#' "$target_base/.workshop-manifest" | grep -v '^[[:space:]]*$' | LC_ALL=C sort > "$new_manifest"
